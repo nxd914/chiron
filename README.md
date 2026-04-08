@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/nxd914/clear-line-agent"><img src="https://img.shields.io/github/stars/nxd914/clear-line-agent?style=for-the-badge" alt="Stars"></a>
+  <a href="https://github.com/nxd914/vequil"><img src="https://img.shields.io/github/stars/nxd914/vequil?style=for-the-badge" alt="Stars"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
   <a href="https://moltbook.com"><img src="https://img.shields.io/badge/Moltbook-Community-orange?style=for-the-badge" alt="Moltbook"></a>
 </p>
@@ -21,15 +21,15 @@ Vequil is a free, open-source ledger for AI agent activity. Connect any agent ru
 Runtime: **Python 3.10+**
 
 ```bash
-git clone https://github.com/nxd914/clear-line-agent.git
-cd clear-line-agent
+git clone https://github.com/nxd914/vequil.git
+cd vequil
 
 pip install -r requirements.txt
 
-PYTHONPATH=src python -m vequil.server
+PYTHONPATH=src uvicorn vequil.asgi:app --reload
 ```
 
-Then open `web/static/dashboard.html` in your browser.
+Then open `http://127.0.0.1:8000/dashboard.html` in your browser.
 
 ## OpenClaw Integration
 

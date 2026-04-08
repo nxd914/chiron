@@ -167,7 +167,7 @@ def _mock_llm(prompt: str) -> dict:
     return {
         "diagnosis": "An unclassified anomaly was detected — the agent is operating in a pattern that Vequil hasn't seen before.",
         "recommended_action": "Escalate to the project lead to check for unauthorized model fine-tuning or tool injections.",
-    } (edited)
+    }
 
 
 

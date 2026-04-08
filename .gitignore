@@ -5,9 +5,13 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+*.log
+tmp/
+data/*.db
+data/logs/*.log
 data/output/*
 !data/output/.gitkeep
 
 
 # Local Netlify folder
-.netlify
+.netlify/

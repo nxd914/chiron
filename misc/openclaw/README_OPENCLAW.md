@@ -4,7 +4,7 @@ Streaming your agents to Vequil is direct and simple. Follow these steps to get 
 
 ## 1. Setup
 
-1.  **Download** the `vequil_plugin.py` file from the [Vequil misc folder](file:///Users/noahdonovan/vequil-alpha/misc/openclaw/hooks/vequil_plugin.py).
+1.  **Copy** [`vequil_plugin.py`](./hooks/vequil_plugin.py) into your OpenClaw hooks directory.
 2.  **Locate** your OpenClaw installation folder on your machine.
 3.  **Drop** the `vequil_plugin.py` file into the `hooks/` directory of your OpenClaw folder.
 
@@ -22,8 +22,8 @@ Streaming your agents to Vequil is direct and simple. Follow these steps to get 
 
 6.  **Restart** your OpenClaw agent.
 7.  **Run** any command in your OpenClaw console (e.g., "Hi agent, browse the web").
-8.  **Open** the Vequil [Dashboard](file:///Users/noahdonovan/vequil-alpha/web/static/dashboard.html).
+8.  **Open** the Vequil dashboard at `http://localhost:8000/dashboard.html`.
 9.  **Refresh** the ledger – you should see your agent's actions appearing in real-time.
 
 ---
-**Need help?** Join the Moltbook community or check the [Vequil Documentation](file:///Users/noahdonovan/vequil-alpha/docs/README.md).
+**Need help?** Join the Moltbook community or check the main project [README](../../README.md).
