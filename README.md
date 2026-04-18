@@ -15,7 +15,7 @@ Automated BTC/ETH arbitrage for [Kalshi](https://kalshi.com) prediction markets.
 ## Quick start
 
 ```bash
-pip install chiron
+pip install git+https://github.com/nxd914/chiron.git
 
 mkdir -p ~/.chiron
 openssl genrsa -out ~/.chiron/private.pem 2048

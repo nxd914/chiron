@@ -237,12 +237,12 @@
 
 <main>
   <div class="hero container">
-    <p class="prompt"><span>$</span> pip install chiron</p>
+    <p class="prompt"><span>$</span> pip install git+https://github.com/nxd914/chiron.git</p>
     <h1>chiron</h1>
     <p class="tagline">Automated BTC/ETH arbitrage for Kalshi prediction markets. Black-Scholes pricing, Kelly sizing, zero learned parameters.</p>
     <div class="install-wrap" onclick="copyInstall(this)">
       <span class="install-prompt">$</span>
-      <span class="install-cmd">pip install chiron</span>
+      <span class="install-cmd">pip install git+https://github.com/nxd914/chiron.git</span>
       <span class="copy-hint">click to copy</span>
     </div>
   </div>
@@ -335,7 +335,7 @@
 
 <script>
   function copyInstall(el) {
-    navigator.clipboard.writeText('pip install chiron').then(() => {
+    navigator.clipboard.writeText('pip install git+https://github.com/nxd914/chiron.git').then(() => {
       const hint = el.querySelector('.copy-hint');
       hint.textContent = 'copied!';
       hint.style.color = 'var(--green)';
