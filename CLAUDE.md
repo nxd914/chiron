@@ -45,6 +45,32 @@ Run with `PYTHONPATH=/path/to/parent` (the directory containing `latency/`).
 - Spread floor 4%. Kelly cap 0.25×. Max 5 concurrent positions.
 - `RiskAgent` encapsulates all position state. `ResolutionAgent` uses the public `restore_position()` / `restore_daily_pnl()` interface — never accesses private attributes directly.
 
+## Empirical status
+
+Paper trading. 8 resolved fills — below the 20-fill minimum for Sharpe estimation. Live mode gated in `core/config.py`:
+
+```python
+min_fills_for_live: int = 100     # minimum resolved paper fills
+min_sharpe_for_live: float = 1.0  # rolling Sharpe over all fills
+```
+
+`EXECUTION_MODE=live` raises `NotImplementedError` until both conditions are met.
+
+## Repo state (as of 2026-04-18)
+
+All institutional-grade hardening is complete (commit `e272aec`). Package renamed `chiron` → `latency` (commit `b35c499`). The physical folder rename (`chiron/` → `latency/`) must be done once by the user:
+
+```bash
+cd /Users/noahdonovan
+mv chiron latency
+cd latency
+PYTHONPATH=.. pytest tests/ -q   # expects 133 passed, 1 pre-existing failure
+```
+
+The 1 pre-existing failure (`test_sync_rebuilds_positions_by_symbol`) is a Python 3.9 asyncio event loop incompatibility — not introduced by this work.
+
+All imports already read `from latency.*`. Once the folder is renamed, no code changes are needed.
+
 ## Running locally
 
 ```bash
