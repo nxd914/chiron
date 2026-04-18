@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "chiron"
+name = "latency"
 version = "1.0.0"
-description = "Automated BTC/ETH arbitrage for Kalshi prediction markets."
+description = "Multi-agent latency arbitrage system for Kalshi crypto binary contracts."
 readme = "README.md"
 requires-python = ">=3.11"
 keywords = ["kalshi", "trading", "kelly-criterion", "arbitrage"]
@@ -23,11 +23,11 @@ dependencies = [
 dev = ["pytest", "pytest-asyncio", "ruff"]
 
 [project.scripts]
-chiron = "chiron.tools.cli:main"
-chiron-daemon = "daemon:main"
+latency = "latency.tools.cli:main"
+latency-daemon = "daemon:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["chiron"]
+packages = ["latency"]
 
 [tool.ruff]
 target-version = "py311"
@@ -35,4 +35,4 @@ line-length = 100
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["chiron/tests"]
+testpaths = ["tests"]

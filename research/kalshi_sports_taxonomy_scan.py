@@ -31,7 +31,7 @@ def _load_env() -> None:
 
 _load_env()
 
-from chiron.core.kalshi_client import KalshiClient  # noqa: E402
+from latency.core.kalshi_client import KalshiClient  # noqa: E402
 
 from kalshi_sports_hints import is_sports_raw, raw_volume_24h  # noqa: E402
 

@@ -13,14 +13,14 @@ import pytest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from chiron.agents.resolution_agent import (
+from latency.agents.resolution_agent import (
     ResolutionAgent,
     _OpenRow,
     _check_resolution_from_raw,
     _compute_pnl,
     KALSHI_TAKER_FEE_RATE,
 )
-from chiron.agents.risk_agent import RiskAgent
+from latency.agents.risk_agent import RiskAgent
 
 
 # ---------------------------------------------------------------------------

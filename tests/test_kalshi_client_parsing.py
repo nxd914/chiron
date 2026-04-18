@@ -1,6 +1,6 @@
 
 import pytest
-from chiron.core.kalshi_client import _parse_market
+from latency.core.kalshi_client import _parse_market
 
 def test_parse_market_handle_cents():
     raw = {

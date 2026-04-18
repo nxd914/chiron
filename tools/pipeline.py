@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
-from chiron.core.kelly import MIN_EDGE, capped_kelly, position_size
+from latency.core.kelly import MIN_EDGE, capped_kelly, position_size
 
 logger = logging.getLogger(__name__)
 

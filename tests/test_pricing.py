@@ -4,14 +4,14 @@ import math
 import pytest
 from datetime import datetime, timezone
 
-from chiron.core.kelly import (
+from latency.core.kelly import (
     KALSHI_TAKER_FEE_RATE,
     kalshi_taker_fee_per_contract,
     compute_kelly,
     capped_kelly,
 )
-from chiron.core.models import FeatureVector
-from chiron.core.pricing import BRACKET_CALIBRATION, bracket_prob, features_to_signal, spot_to_implied_prob
+from latency.core.models import FeatureVector
+from latency.core.pricing import BRACKET_CALIBRATION, bracket_prob, features_to_signal, spot_to_implied_prob
 
 
 def test_spot_to_implied_prob_deep_in_the_money():

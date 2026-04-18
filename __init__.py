@@ -1,1 +1,1 @@
-"""Quant — Multi-agent prediction market trading framework."""
+"""Multi-agent latency arbitrage system for Kalshi crypto binary contracts."""

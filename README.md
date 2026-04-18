@@ -1,8 +1,8 @@
-# chiron
+# Kalshi Crypto Latency Arbitrage
 
 Spot-price propagation latency arbitrage on Kalshi crypto binary contracts.
 
-When BTC or ETH moves sharply on Binance or Coinbase, Kalshi's order book reprices seconds-to-minutes behind. Chiron measures that divergence with closed-form Black-Scholes N(d2) against Welford-estimated realized volatility, enters when edge exceeds the fee-adjusted threshold, and sizes positions with Kelly criterion.
+When BTC or ETH moves sharply on Binance or Coinbase, Kalshi's order book reprices seconds-to-minutes behind. The system measures that divergence with closed-form Black-Scholes N(d2) against Welford-estimated realized volatility, enters when edge exceeds the fee-adjusted threshold, and sizes positions with Kelly criterion.
 
 No learned parameters. No heuristics. Every decision in the execution path is a deterministic function of spot price, realized vol, and the pricing model.
 
@@ -104,13 +104,13 @@ min_sharpe_for_live: float = 1.0  # rolling Sharpe over all fills
 ## Setup
 
 ```bash
-git clone https://github.com/nxd914/chiron.git && cd chiron
+git clone https://github.com/nxd914/latency.git && cd latency
 pip install -e ".[dev]"
 
 # Generate RSA key pair for Kalshi authentication
-mkdir -p ~/.chiron
-openssl genrsa -out ~/.chiron/private.pem 2048
-openssl rsa -in ~/.chiron/private.pem -pubout -out ~/.chiron/public.pem
+mkdir -p ~/.latency
+openssl genrsa -out ~/.latency/private.pem 2048
+openssl rsa -in ~/.latency/private.pem -pubout -out ~/.latency/public.pem
 # Upload public key at kalshi.com/account/api and save the key UUID
 ```
 
@@ -118,7 +118,7 @@ openssl rsa -in ~/.chiron/private.pem -pubout -out ~/.chiron/public.pem
 
 ```
 KALSHI_API_KEY=<uuid-from-kalshi-dashboard>
-KALSHI_PRIVATE_KEY_PATH=~/.chiron/private.pem
+KALSHI_PRIVATE_KEY_PATH=~/.latency/private.pem
 BANKROLL_USDC=100000
 EXECUTION_MODE=paper
 ```

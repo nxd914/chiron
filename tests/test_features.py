@@ -11,13 +11,13 @@ from datetime import datetime, timezone
 
 import pytest
 
-from chiron.core.features import (
+from latency.core.features import (
     JUMP_RETURN_THRESHOLD,
     MIN_TICKS_FOR_FEATURES,
     RollingWindow,
     compute_features,
 )
-from chiron.core.models import Tick
+from latency.core.models import Tick
 
 
 # ---------------------------------------------------------------------------

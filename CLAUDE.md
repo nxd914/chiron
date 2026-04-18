@@ -1,8 +1,8 @@
-# chiron — contributor reference
+# contributor reference
 
 ## System overview
 
-Spot-price propagation latency arbitrage on Kalshi crypto binary contracts. When BTC or ETH moves sharply on Binance or Coinbase, Kalshi's order book reprices seconds-to-minutes behind. Chiron measures that divergence with closed-form Black-Scholes N(d2) against Welford-estimated realized volatility, enters when edge exceeds 4%, and sizes positions with fee-adjusted Kelly criterion.
+Spot-price propagation latency arbitrage on Kalshi crypto binary contracts. When BTC or ETH moves sharply on Binance or Coinbase, Kalshi's order book reprices seconds-to-minutes behind. The system measures that divergence with closed-form Black-Scholes N(d2) against Welford-estimated realized volatility, enters when edge exceeds 4%, and sizes positions with fee-adjusted Kelly criterion.
 
 No learned parameters. No heuristics. Every decision in the execution path is a deterministic function of spot price, realized vol, and the pricing model.
 
@@ -22,7 +22,7 @@ Entry point: `daemon.py` at repo root.
 ## Package layout
 
 ```
-chiron/              ← repo root IS the chiron package (has __init__.py)
+latency/             ← repo root IS the package (has __init__.py)
   agents/            Async execution layer — seven concurrent agents
   core/              Pure math + models — no I/O, no side effects
   tests/             Pytest suite (11 modules, AAA pattern)
@@ -33,7 +33,7 @@ chiron/              ← repo root IS the chiron package (has __init__.py)
   deploy/            Docker / Railway deployment config
 ```
 
-Run with `PYTHONPATH=/path/to/parent` (the directory containing `chiron/`).
+Run with `PYTHONPATH=/path/to/parent` (the directory containing `latency/`).
 
 ## Core invariants
 

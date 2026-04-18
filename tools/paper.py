@@ -4,7 +4,7 @@ Paper Trading Engine — Kalshi Edition
 Autonomous strategy loop: scan Kalshi → evaluate → size → paper-execute → track P&L.
 Runs continuously, printing trade signals and portfolio state to the terminal.
 
-    from chiron.paper import PaperTrader
+    from latency.tools.paper import PaperTrader
     trader = PaperTrader(bankroll=100_000.0)
     asyncio.run(trader.run())
 """
@@ -21,9 +21,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from chiron.core.kalshi_client import KalshiClient
-from chiron.core.kelly import MIN_EDGE, capped_kelly, position_size
-from chiron.core.models import (
+from latency.core.kalshi_client import KalshiClient
+from latency.core.kelly import MIN_EDGE, capped_kelly, position_size
+from latency.core.models import (
     KalshiMarket,
     Order,
     OrderStatus,
@@ -33,7 +33,7 @@ from chiron.core.models import (
     TradeOpportunity,
     FeatureVector,
 )
-from chiron.tools.pipeline import Pipeline
+from latency.tools.pipeline import Pipeline
 
 logger = logging.getLogger(__name__)
 

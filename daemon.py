@@ -33,7 +33,7 @@ def _load_project_dotenv() -> None:
 
 _load_project_dotenv()
 
-from chiron.agents import (  # noqa: E402
+from latency.agents import (  # noqa: E402
     CryptoFeedAgent,
     ExecutionAgent,
     FeatureAgent,
@@ -42,7 +42,7 @@ from chiron.agents import (  # noqa: E402
     ScannerAgent,
     WebsocketAgent,
 )
-from chiron.core.models import Signal, Tick, TradeOpportunity  # noqa: E402
+from latency.core.models import Signal, Tick, TradeOpportunity  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,

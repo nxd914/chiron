@@ -1,6 +1,6 @@
 """Tests for Kelly criterion implementation."""
 
-from chiron.core.kelly import capped_kelly, compute_kelly, position_size
+from latency.core.kelly import capped_kelly, compute_kelly, position_size
 
 
 def test_kelly_positive_edge():

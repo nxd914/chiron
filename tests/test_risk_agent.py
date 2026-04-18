@@ -12,9 +12,9 @@ import asyncio
 import pytest
 from datetime import datetime, timedelta, timezone
 
-from chiron.agents.risk_agent import RiskAgent
-from chiron.core.config import DEFAULT_CONFIG
-from chiron.core.models import (
+from latency.agents.risk_agent import RiskAgent
+from latency.core.config import DEFAULT_CONFIG
+from latency.core.models import (
     FeatureVector,
     KalshiMarket,
     Side,

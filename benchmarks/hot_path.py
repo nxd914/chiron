@@ -1,5 +1,5 @@
 """
-Hot-path benchmark for chiron's CPU-bound components.
+Hot-path benchmark for CPU-bound components.
 
 Measures per-call latency for:
   - RollingWindow.push() under realistic tick rates
@@ -174,7 +174,7 @@ def bench_full_pipeline() -> None:
 
 
 def main() -> None:
-    print("chiron hot-path benchmark")
+    print("hot-path benchmark")
     print(f"{'─' * 65}")
     print("n=100,000 calls per bench (except where noted)\n")
 

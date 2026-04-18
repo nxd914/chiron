@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from chiron.agents.crypto_feed_agent import CryptoFeedAgent
+from latency.agents.crypto_feed_agent import CryptoFeedAgent
 
 
 # ---------------------------------------------------------------------------

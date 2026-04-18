@@ -14,13 +14,13 @@ import pytest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
-from chiron.agents.scanner_agent import (
+from latency.agents.scanner_agent import (
     ScannerAgent,
     _is_bracket_market,
     _is_less_market,
     parse_strike,
 )
-from chiron.core.models import (
+from latency.core.models import (
     FeatureVector,
     KalshiMarket,
     Signal,
