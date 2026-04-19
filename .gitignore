@@ -39,3 +39,10 @@ data/
 .pytest_cache/
 .coverage
 htmlcov/
+coverage.xml
+
+# Type checker
+.mypy_cache/
+
+# Linter
+.ruff_cache/

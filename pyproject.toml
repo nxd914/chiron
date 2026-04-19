@@ -20,7 +20,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-asyncio", "ruff"]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "ruff",
+    "mypy",
+    "hypothesis",
+    "structlog",
+]
 
 [project.scripts]
 latency = "latency.tools.cli:main"
@@ -32,7 +40,32 @@ packages = ["latency"]
 [tool.ruff]
 target-version = "py311"
 line-length = 100
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["E501", "B008"]
+
+[tool.ruff.per-file-ignores]
+"tests/*" = ["S", "ANN"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+strict = false
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["core.*"]
+strict = true
+disallow_untyped_defs = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = "-q --tb=short"
+
+[tool.coverage.run]
+source = ["core", "agents"]
+omit = ["tests/*", "benchmarks/*", "research/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
