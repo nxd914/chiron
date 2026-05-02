@@ -47,3 +47,9 @@ coverage.xml
 
 # Linter
 .ruff_cache/
+
+#Research
+quant/
+
+# Local ops runbook (contains IP, project ID, redeploy commands)
+RUNBOOK.local.md

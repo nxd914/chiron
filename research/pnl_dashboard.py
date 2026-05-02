@@ -6,6 +6,7 @@ Displays metrics, open positions, and resolved trades from the paper ledger.
 
 import math
 import sqlite3
+from core.db import connect as db_connect
 import statistics
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -82,7 +83,7 @@ def main() -> None:
         print(f"Error: Database not found at {DB_PATH}")
         return
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = db_connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 

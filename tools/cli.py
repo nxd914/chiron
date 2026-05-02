@@ -19,7 +19,7 @@ import sys
 
 from dotenv import load_dotenv
 
-from latency.tools.pipeline import Pipeline
+from tools.pipeline import Pipeline
 
 
 def main() -> None:
@@ -147,7 +147,7 @@ def _cmd_demo() -> None:
 
 
 def _cmd_paper(args: argparse.Namespace) -> None:
-    from latency.tools.paper import PaperTrader
+    from tools.paper import PaperTrader
 
     trader = PaperTrader(
         bankroll=args.bankroll,
@@ -168,7 +168,7 @@ def _cmd_paper(args: argparse.Namespace) -> None:
 
 
 def _cmd_history() -> None:
-    from latency.tools.paper import PaperTrader
+    from tools.paper import PaperTrader
 
     trader = PaperTrader(bankroll=0)
     trader.print_history(30)
@@ -193,7 +193,7 @@ def _print_result(result, *, live_note: bool) -> None:
 # ------------------------------------------------------------------
 
 async def _fetch_top_markets_async(limit: int, min_volume: float = 1000.0):
-    from latency.core.kalshi_client import KalshiClient
+    from core.kalshi_client import KalshiClient
     async with KalshiClient() as client:
         return await client.get_top_markets(limit=limit, min_volume_24h=min_volume)
 

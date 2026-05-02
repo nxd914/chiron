@@ -14,13 +14,13 @@ import pytest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
-from latency.agents.scanner_agent import (
+from strategies.crypto.agents.scanner_agent import (
     ScannerAgent,
     _is_bracket_market,
     _is_less_market,
     parse_strike,
 )
-from latency.core.models import (
+from strategies.crypto.core.models import (
     FeatureVector,
     KalshiMarket,
     Signal,
@@ -154,7 +154,8 @@ async def test_signal_scan_drains_burst_queue():
         if call_count >= 1:
             raise KeyboardInterrupt("break loop")
 
-    with patch("asyncio.sleep", side_effect=_fake_sleep):
+    with patch("asyncio.sleep", side_effect=_fake_sleep), \
+         patch("strategies.crypto.agents.scanner_agent._is_trading_hours", return_value=True):
         try:
             await agent._signal_scan()
         except (KeyboardInterrupt, asyncio.CancelledError):
@@ -187,7 +188,8 @@ async def test_signal_scan_preserves_multi_symbol_signals():
         if call_count >= 1:
             raise KeyboardInterrupt("break loop")
 
-    with patch("asyncio.sleep", side_effect=_fake_sleep):
+    with patch("asyncio.sleep", side_effect=_fake_sleep), \
+         patch("strategies.crypto.agents.scanner_agent._is_trading_hours", return_value=True):
         try:
             await agent._signal_scan()
         except (KeyboardInterrupt, asyncio.CancelledError):

@@ -4,30 +4,33 @@ Execution Agent
 Receives approved (opportunity, size_usdc) pairs from the risk agent
 and places orders on Kalshi via the authenticated API.
 
-Modes:
-  PAPER  — simulates fills at current market mid, logs to SQLite
-  LIVE   — places real orders via KalshiClient (disabled until paper validates)
+Modes (resolved by core.environment.resolve_environment):
+  LOCAL_SIM  — synthesizes fills at market ask, no network. Logs to SQLite.
+  PAPER      — places real orders against the Kalshi DEMO API.
+  LIVE       — places real orders against the Kalshi PRODUCTION API.
 
-Switch via EXECUTION_MODE env var: "paper" (default) or "live"
+The agent never reads EXECUTION_MODE directly — the daemon resolves the
+Environment once and passes it in.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from core.db import connect as db_connect
+from core.environment import Environment, resolve_environment
+from core.kalshi_client import KalshiClient
 from ..core.models import Order, OrderStatus, Side, TradeOpportunity
 
 logger = logging.getLogger(__name__)
 
-EXECUTION_MODE = os.environ.get("EXECUTION_MODE", "paper")
-DB_PATH = Path(__file__).parent.parent / "data" / "paper_trades.db"
+DB_PATH = Path(__file__).resolve().parents[3] / "data" / "paper_trades.db"
 
 
 class ExecutionAgent:
@@ -39,10 +42,18 @@ class ExecutionAgent:
         self,
         approved_queue: asyncio.Queue[tuple[TradeOpportunity, float]],
         risk_agent=None,   # typed weakly to avoid circular import
+        environment: Optional[Environment] = None,
     ) -> None:
         self._approved = approved_queue
         self._risk_agent = risk_agent
+        self._env = environment or resolve_environment()
         self._db = self._init_db()
+        self._kalshi: Optional[KalshiClient] = None
+        logger.info(
+            "ExecutionAgent ready | mode=%s | place_real_orders=%s",
+            self._env.label,
+            self._env.place_real_orders,
+        )
 
     async def run(self) -> None:
         while True:
@@ -60,12 +71,12 @@ class ExecutionAgent:
     async def _execute(
         self, opp: TradeOpportunity, size_usdc: float
     ) -> Order:
-        if EXECUTION_MODE == "live":
+        if self._env.place_real_orders:
             return await self._live_order(opp, size_usdc)
-        return self._paper_order(opp, size_usdc)
+        return self._sim_order(opp, size_usdc)
 
-    def _paper_order(self, opp: TradeOpportunity, size_usdc: float) -> Order:
-        """Simulate fill at current market ask (no slippage model yet)."""
+    def _sim_order(self, opp: TradeOpportunity, size_usdc: float) -> Order:
+        """Synthesize a fill at current market ask (local_sim mode, no network)."""
         fill_price = (
             opp.market.yes_ask
             if opp.side == Side.YES
@@ -79,17 +90,80 @@ class ExecutionAgent:
             fill_price=fill_price,
             placed_at=now,
             filled_at=now,
-            order_id=f"paper_{uuid.uuid4().hex[:12]}",
+            order_id=f"sim_{uuid.uuid4().hex[:12]}",
         )
 
     async def _live_order(self, opp: TradeOpportunity, size_usdc: float) -> Order:
-        """
-        Place a real order via KalshiClient.
-        NOT activated until paper trading validates the edge.
-        """
-        raise NotImplementedError(
-            "Live execution is disabled. Set EXECUTION_MODE=paper to run paper trades. "
-            "Enable live trading only after paper Sharpe >= 1.0 over 2+ weeks."
+        if self._kalshi is None:
+            self._kalshi = KalshiClient(
+                api_key=self._env.api_key,
+                private_key_path=self._env.private_key_path,
+                base_url=self._env.rest_base_url,
+            )
+            await self._kalshi.open()
+            logger.info(
+                "ExecutionAgent: KalshiClient opened against %s (mode=%s)",
+                self._env.rest_base_url,
+                self._env.label,
+            )
+
+        now = datetime.now(tz=timezone.utc)
+
+        if opp.side == Side.YES:
+            fill_price = opp.market.yes_ask
+            yes_price_cents = max(1, min(99, round(fill_price * 100)))
+        else:
+            fill_price = opp.market.no_ask
+            no_price_cents = max(1, min(99, round(fill_price * 100)))
+            yes_price_cents = 100 - no_price_cents
+
+        count = max(1, int(size_usdc / fill_price))
+
+        try:
+            resp = await self._kalshi.place_limit_order(
+                ticker=opp.market.ticker,
+                side=opp.side.value.lower(),
+                count=count,
+                yes_price_cents=yes_price_cents,
+            )
+        except Exception as exc:
+            logger.error("Live order failed for %s: %s", opp.market.ticker, exc)
+            return Order(
+                opportunity=opp,
+                size_usdc=size_usdc,
+                status=OrderStatus.REJECTED,
+                fill_price=None,
+                placed_at=now,
+                error=str(exc),
+            )
+
+        order_data = resp.get("order", resp)
+        order_id = order_data.get("order_id") or order_data.get("id")
+
+        if not order_id:
+            error_msg = str(resp)[:200]
+            logger.error("Live order rejected for %s: %s", opp.market.ticker, error_msg)
+            return Order(
+                opportunity=opp,
+                size_usdc=size_usdc,
+                status=OrderStatus.REJECTED,
+                fill_price=None,
+                placed_at=now,
+                error=error_msg,
+            )
+
+        filled_count = order_data.get("filled_count", 0)
+        status = OrderStatus.FILLED if filled_count >= count else OrderStatus.PENDING
+        actual_size = filled_count * fill_price if filled_count else size_usdc
+
+        return Order(
+            opportunity=opp,
+            size_usdc=actual_size,
+            status=status,
+            fill_price=fill_price,
+            placed_at=now,
+            filled_at=now if status == OrderStatus.FILLED else None,
+            order_id=str(order_id),
         )
 
     def _persist(self, order: Order) -> None:
@@ -112,8 +186,9 @@ class ExecutionAgent:
                     size_usdc, fill_price, status,
                     placed_at, filled_at,
                     spot_price_at_signal, signal_latency_ms,
-                    realized_vol, kelly_fraction
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    realized_vol, kelly_fraction,
+                    environment
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     order.order_id,
@@ -132,6 +207,7 @@ class ExecutionAgent:
                     signal_latency_ms,
                     realized_vol,
                     kelly_fraction,
+                    self._env.label,
                 ),
             )
             self._db.commit()
@@ -141,7 +217,7 @@ class ExecutionAgent:
     def _init_db(self) -> sqlite3.Connection:
         # Ensure data directory exists and table is initialized
         DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
+        conn = db_connect(str(DB_PATH), check_same_thread=False)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS trades (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -163,7 +239,8 @@ class ExecutionAgent:
                 spot_price_at_signal REAL,
                 signal_latency_ms REAL,
                 realized_vol REAL,
-                kelly_fraction REAL
+                kelly_fraction REAL,
+                environment TEXT
             )
         """)
         # Migrate existing DBs: add new audit columns if missing
@@ -173,5 +250,7 @@ class ExecutionAgent:
         for col in ("spot_price_at_signal", "signal_latency_ms", "realized_vol", "kelly_fraction"):
             if col not in existing_cols:
                 conn.execute(f"ALTER TABLE trades ADD COLUMN {col} REAL")
+        if "environment" not in existing_cols:
+            conn.execute("ALTER TABLE trades ADD COLUMN environment TEXT")
         conn.commit()
         return conn

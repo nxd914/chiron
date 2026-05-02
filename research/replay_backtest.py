@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import math
 import sqlite3
+from core.db import connect as db_connect
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -47,7 +48,7 @@ def _load_fills(db_path: Path) -> list[FillRecord]:
         print(f"[replay_backtest] No database at {db_path}. Run the daemon in paper mode first.")
         sys.exit(0)
 
-    conn = sqlite3.connect(db_path)
+    conn = db_connect(db_path)
     conn.row_factory = sqlite3.Row
     try:
         rows = conn.execute(
@@ -85,6 +86,7 @@ def _load_fills(db_path: Path) -> list[FillRecord]:
 
 
 def _sharpe(returns: list[float], fills_per_day: int = 4) -> Optional[float]:
+    """Sharpe over normalized per-fill returns (pnl / size_usdc), bankroll-agnostic."""
     if len(returns) < MIN_FILLS_FOR_SHARPE:
         return None
     n = len(returns)
@@ -104,8 +106,9 @@ def _calibration_buckets(fills: list[FillRecord]) -> dict[str, dict[str, float]]
     for f in fills:
         if f.resolution not in ("YES", "NO"):
             continue
-        won = (f.side == "yes" and f.resolution == "YES") or (f.side == "no" and f.resolution == "NO")
-        p = f.model_prob
+        won = (f.side.upper() == "YES" and f.resolution == "YES") or (f.side.upper() == "NO" and f.resolution == "NO")
+        # For NO-side trades, model_prob is the YES probability; bucket on the probability of the side taken
+        p = f.model_prob if f.side.upper() == "YES" else 1.0 - f.model_prob
         if 0.50 <= p < 0.60:
             buckets["0.50–0.60"].append((p, won))
         elif 0.60 <= p < 0.70:
@@ -146,25 +149,29 @@ def run(db_path: Path) -> None:
         return
 
     pnls = [f.pnl_usdc for f in resolved]  # type: ignore[misc]
+    # Normalized return per fill: pnl / size_usdc — bankroll-agnostic across different position sizes
+    norm_returns = [f.pnl_usdc / f.size_usdc for f in resolved if f.size_usdc > 0]  # type: ignore[operator]
     wins = [f for f in resolved if (f.pnl_usdc or 0) > 0]
-    losses = [f for f in resolved if (f.pnl_usdc or 0) <= 0]
     total_pnl = sum(pnls)
+    total_deployed = sum(f.size_usdc for f in resolved)
     win_rate = len(wins) / len(resolved)
     mean_edge = sum(f.edge for f in resolved) / len(resolved)
     mean_model_prob = sum(f.model_prob for f in resolved) / len(resolved)
+    mean_return_pct = sum(norm_returns) / len(norm_returns) if norm_returns else 0.0
+    best_return = max(norm_returns) if norm_returns else 0.0
+    worst_return = min(norm_returns) if norm_returns else 0.0
 
     print(f"\n  {'Metric':<30} {'Value':>12}")
     print(f"  {'─' * 44}")
     print(f"  {'Resolved fills':<30} {len(resolved):>12}")
     print(f"  {'Win rate':<30} {win_rate:>11.1%}")
-    print(f"  {'Total P&L (USDC)':<30} {total_pnl:>+12.2f}")
-    print(f"  {'Mean P&L per fill (USDC)':<30} {total_pnl / len(resolved):>+12.2f}")
+    print(f"  {'Mean return per fill':<30} {mean_return_pct:>+11.1%}")
+    print(f"  {'Best fill return':<30} {best_return:>+11.1%}")
+    print(f"  {'Worst fill return':<30} {worst_return:>+11.1%}")
     print(f"  {'Mean model probability':<30} {mean_model_prob:>11.1%}")
     print(f"  {'Mean edge at entry':<30} {mean_edge:>11.1%}")
-    print(f"  {'Largest win (USDC)':<30} {max(pnls):>+12.2f}")
-    print(f"  {'Largest loss (USDC)':<30} {min(pnls):>+12.2f}")
 
-    sharpe = _sharpe(pnls)
+    sharpe = _sharpe(norm_returns)
     if sharpe is not None:
         print(f"  {'Annualized Sharpe (est.)':<30} {sharpe:>12.2f}")
     else:

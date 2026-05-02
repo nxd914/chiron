@@ -4,7 +4,7 @@ Paper Trading Engine — Kalshi Edition
 Autonomous strategy loop: scan Kalshi → evaluate → size → paper-execute → track P&L.
 Runs continuously, printing trade signals and portfolio state to the terminal.
 
-    from latency.tools.paper import PaperTrader
+    from tools.paper import PaperTrader
     trader = PaperTrader(bankroll=100_000.0)
     asyncio.run(trader.run())
 """
@@ -15,15 +15,16 @@ import asyncio
 import json
 import logging
 import sqlite3
+from core.db import connect as db_connect
 import time
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from latency.core.kalshi_client import KalshiClient
-from latency.core.kelly import MIN_EDGE, capped_kelly, position_size
-from latency.core.models import (
+from core.kalshi_client import KalshiClient
+from core.kelly import MIN_EDGE, capped_kelly, position_size
+from strategies.crypto.core.models import (
     KalshiMarket,
     Order,
     OrderStatus,
@@ -33,7 +34,7 @@ from latency.core.models import (
     TradeOpportunity,
     FeatureVector,
 )
-from latency.tools.pipeline import Pipeline
+from tools.pipeline import Pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -410,7 +411,7 @@ class PaperTrader:
 
     def _init_db(self) -> sqlite3.Connection:
         DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
+        conn = db_connect(str(DB_PATH), check_same_thread=False)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS trades (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

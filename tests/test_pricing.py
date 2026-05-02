@@ -4,14 +4,14 @@ import math
 import pytest
 from datetime import datetime, timezone
 
-from latency.core.kelly import (
+from core.kelly import (
     KALSHI_TAKER_FEE_RATE,
     kalshi_taker_fee_per_contract,
     compute_kelly,
     capped_kelly,
 )
-from latency.core.models import FeatureVector
-from latency.core.pricing import BRACKET_CALIBRATION, bracket_prob, features_to_signal, spot_to_implied_prob
+from strategies.crypto.core.models import FeatureVector
+from strategies.crypto.core.pricing import BRACKET_CALIBRATION, bracket_prob, features_to_signal, spot_to_implied_prob
 
 
 def test_spot_to_implied_prob_deep_in_the_money():

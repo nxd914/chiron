@@ -11,13 +11,13 @@ from datetime import datetime, timezone
 
 import pytest
 
-from latency.agents.scanner_agent import (
+from strategies.crypto.agents.scanner_agent import (
     market_matches_crypto_signal,
     parse_strike,
     _is_crypto_market,
     _market_symbol,
 )
-from latency.core.models import (
+from strategies.crypto.core.models import (
     FeatureVector,
     KalshiMarket,
     Signal,

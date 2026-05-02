@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import math
 import sqlite3
+from core.db import connect as db_connect
 from collections import defaultdict
 from pathlib import Path
 
@@ -25,7 +26,7 @@ TRADING_DAYS_PER_YEAR = 252
 
 
 def _load_trades(db_path: Path) -> list[dict]:
-    conn = sqlite3.connect(str(db_path))
+    conn = db_connect(str(db_path))
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
         """

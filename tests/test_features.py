@@ -11,13 +11,13 @@ from datetime import datetime, timezone
 
 import pytest
 
-from latency.core.features import (
+from strategies.crypto.core.features import (
     JUMP_RETURN_THRESHOLD,
     MIN_TICKS_FOR_FEATURES,
     RollingWindow,
     compute_features,
 )
-from latency.core.models import Tick
+from strategies.crypto.core.models import Tick
 
 
 # ---------------------------------------------------------------------------

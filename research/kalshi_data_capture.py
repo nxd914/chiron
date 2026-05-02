@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import sqlite3
+from core.db import connect as db_connect
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -37,7 +38,7 @@ def _load_env() -> None:
 
 _load_env()
 
-from latency.core.kalshi_client import KalshiClient, market_from_api_dict  # noqa: E402
+from core.kalshi_client import KalshiClient, market_from_api_dict  # noqa: E402
 
 from kalshi_sports_hints import is_sports_raw, raw_volume_24h  # noqa: E402
 
@@ -55,7 +56,7 @@ STAGGER_SEC = float(os.environ.get("KALSHI_CAPTURE_STAGGER", "0.25"))
 
 def init_db() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = db_connect(DB_PATH)
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS orderbooks (

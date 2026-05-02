@@ -39,9 +39,12 @@ from .models import KalshiMarket
 
 logger = logging.getLogger(__name__)
 
-KALSHI_BASE = "https://api.elections.kalshi.com/trade-api/v2"
+DEFAULT_KALSHI_BASE = "https://api.elections.kalshi.com/trade-api/v2"
+DEFAULT_KALSHI_WS = "wss://api.elections.kalshi.com/trade-api/ws/v2"
 REQUEST_TIMEOUT = 10.0
 GET_429_MAX_RETRIES = 5
+POST_429_MAX_RETRIES = 3
+POST_429_MAX_DELAY = 5.0  # cap at 5s — skip trade rather than stall 30s
 _HTTP_BODY_LOG_MAX = 800
 
 
@@ -74,6 +77,7 @@ class KalshiClient:
         self,
         api_key: Optional[str] = None,
         private_key_path: Optional[str | Path] = None,
+        base_url: Optional[str] = None,
     ) -> None:
         self._api_key = api_key or os.environ.get("KALSHI_API_KEY", "")
         raw_path = private_key_path or os.environ.get("KALSHI_PRIVATE_KEY_PATH", "")
@@ -81,6 +85,7 @@ class KalshiClient:
         self._private_key: Optional[RSAPrivateKey] = (
             _load_rsa_key(expanded) if expanded else None
         )
+        self._base_url = (base_url or DEFAULT_KALSHI_BASE).rstrip("/")
         self._session: Optional[aiohttp.ClientSession] = None
         self.authenticated = bool(self._api_key and self._private_key)
 
@@ -327,7 +332,7 @@ class KalshiClient:
         if self._session is None:
             raise RuntimeError("KalshiClient not opened. Use 'async with' or call open().")
 
-        url = KALSHI_BASE + path
+        url = self._base_url + path
         headers = (
             self._signed_headers("GET", path)
             if self.authenticated
@@ -384,22 +389,44 @@ class KalshiClient:
         if self._session is None:
             raise RuntimeError("KalshiClient not opened.")
 
-        url = KALSHI_BASE + path
+        url = self._base_url + path
         headers = self._signed_headers("POST", path)
         headers["Content-Type"] = "application/json"
 
-        try:
-            async with self._session.post(url, headers=headers, json=payload) as resp:
-                return await resp.json()
-        except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
-            logger.debug("Kalshi POST error %s: %s", path, exc)
-            return {}
+        attempt = 0
+        while True:
+            try:
+                async with self._session.post(url, headers=headers, json=payload) as resp:
+                    if resp.status == 429:
+                        await resp.read()
+                        if attempt >= POST_429_MAX_RETRIES - 1:
+                            logger.warning(
+                                "Kalshi rate limit (POST %s) — max retries (%d) exceeded, skipping",
+                                path,
+                                POST_429_MAX_RETRIES,
+                            )
+                            return {}
+                        delay = min(POST_429_MAX_DELAY, 2.0**attempt)
+                        logger.warning(
+                            "Kalshi rate limit (POST %s) — sleeping %.1fs then retry %d/%d",
+                            path,
+                            delay,
+                            attempt + 1,
+                            POST_429_MAX_RETRIES,
+                        )
+                        await asyncio.sleep(delay)
+                        attempt += 1
+                        continue
+                    return await resp.json()
+            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+                logger.warning("Kalshi POST %s transport error: %s", path, exc)
+                return {}
 
     async def _delete(self, path: str) -> dict:
         if self._session is None:
             raise RuntimeError("KalshiClient not opened.")
 
-        url = KALSHI_BASE + path
+        url = self._base_url + path
         headers = self._signed_headers("DELETE", path)
 
         try:
@@ -424,10 +451,15 @@ class KalshiWebsocketClient:
     Async Kalshi WebSocket client.
     Handles handshake, subscriptions, and message streaming.
     """
-    def __init__(self, api_key: str, private_key: RSAPrivateKey) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        private_key: RSAPrivateKey,
+        ws_url: Optional[str] = None,
+    ) -> None:
         self.api_key = api_key
         self.private_key = private_key
-        self.ws_url = "wss://api.elections.kalshi.com/trade-api/ws/v2"
+        self.ws_url = ws_url or DEFAULT_KALSHI_WS
         self._ws = None
 
     async def connect(self):

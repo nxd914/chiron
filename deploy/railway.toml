@@ -1,5 +1,0 @@
-[deploy]
-startCommand = "python server.py"
-healthcheckPath = "/"
-healthcheckTimeout = 30
-restartPolicyType = "on_failure"

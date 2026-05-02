@@ -12,6 +12,7 @@ Usage:
 from __future__ import annotations
 
 import sqlite3
+from core.db import connect as db_connect
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,7 +27,7 @@ def main() -> int:
         print(f"DB not found: {DB_PATH}")
         return 1
 
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = db_connect(str(DB_PATH))
 
     # Find unresolved positions
     query = "SELECT id, ticker, side, fill_price, size_usdc, filled_at FROM trades WHERE resolution IS NULL"

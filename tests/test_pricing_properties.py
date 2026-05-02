@@ -14,7 +14,7 @@ import pytest
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
-from latency.core.pricing import bracket_prob, spot_to_implied_prob
+from strategies.crypto.core.pricing import bracket_prob, spot_to_implied_prob
 
 # Realistic ranges for crypto trading
 PRICE_STRAT = st.floats(min_value=100.0, max_value=200_000.0, allow_nan=False, allow_infinity=False)

@@ -196,11 +196,16 @@ class CryptoFeedAgent:
             if symbol is None:
                 return None
 
+            raw_time = msg.get("time")
+            if raw_time:
+                ts = datetime.fromisoformat(raw_time.replace("Z", "+00:00"))
+            else:
+                ts = datetime.now(tz=timezone.utc)
             return Tick(
                 exchange="coinbase",
                 symbol=symbol,
                 price=float(msg["price"]),
-                timestamp=datetime.now(tz=timezone.utc),
+                timestamp=ts,
                 volume=float(msg.get("last_size", 0)),
             )
         except (KeyError, ValueError, TypeError) as exc:

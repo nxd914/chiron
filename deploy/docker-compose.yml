@@ -1,20 +1,56 @@
-version: '3.8'
-
 services:
-  trading-loop:
-    build: .
+  daemon:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    command: python3 -m strategies.crypto.daemon
     restart: always
     env_file: .env
     volumes:
-      - ./quant/data:/app/quant/data
-      - ./.quant:/root/.quant:ro
-    command: python -m quant.daemon
+      - kinzie-data:/app/data
+      - ${KALSHI_PRIVATE_KEY_PATH:-/dev/null}:/app/kalshi_private.pem:ro
+    environment:
+      - KALSHI_PRIVATE_KEY_PATH=/app/kalshi_private.pem
 
-  observation-dashboard:
-    build: .
+  econ-daemon:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    command: python3 -m strategies.econ.daemon
     restart: always
-    ports:
-      - "80:8000"
+    env_file: .env
     volumes:
-      - ./quant/data:/app/quant/data
-    command: python dashboard.py
+      - kinzie-data:/app/data
+      - ${KALSHI_PRIVATE_KEY_PATH:-/dev/null}:/app/kalshi_private.pem:ro
+    environment:
+      - KALSHI_PRIVATE_KEY_PATH=/app/kalshi_private.pem
+
+  sports-daemon:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    command: python3 -m strategies.sports.daemon
+    restart: always
+    env_file: .env
+    volumes:
+      - kinzie-data:/app/data
+      - ${KALSHI_PRIVATE_KEY_PATH:-/dev/null}:/app/kalshi_private.pem:ro
+    environment:
+      - KALSHI_PRIVATE_KEY_PATH=/app/kalshi_private.pem
+
+  weather-daemon:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    command: python3 -m strategies.weather.daemon
+    restart: always
+    env_file: .env
+    volumes:
+      - kinzie-data:/app/data
+      - ${KALSHI_PRIVATE_KEY_PATH:-/dev/null}:/app/kalshi_private.pem:ro
+    environment:
+      - KALSHI_PRIVATE_KEY_PATH=/app/kalshi_private.pem
+
+volumes:
+  kinzie-data:
+    driver: local

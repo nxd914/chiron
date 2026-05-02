@@ -7,6 +7,7 @@ Uses FastAPI to serve real-time metrics from the paper_trades.db.
 
 import math
 import sqlite3
+from core.db import connect as db_connect
 import statistics
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -41,7 +42,7 @@ def get_db_stats():
             "trades": []
         }
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = db_connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 

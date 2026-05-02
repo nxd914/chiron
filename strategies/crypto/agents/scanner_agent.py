@@ -19,13 +19,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
 from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Optional
 
-from ..core.kalshi_client import KalshiClient
-from ..core.kelly import MIN_EDGE, capped_kelly
+from core.kalshi_client import KalshiClient
+from core.kelly import MIN_EDGE, capped_kelly
 from ..core.models import (
     FeatureVector,
     KalshiMarket,
@@ -57,6 +58,7 @@ MIN_BRACKET_DISTANCE_PCT = 0.005  # skip brackets where spot is within 0.5% of b
 TRADING_START_HOUR_UTC = 8    # 8 AM UTC = 4 AM ET
 TRADING_END_HOUR_UTC = 1      # 1 AM UTC (next day) = 9 PM ET
 IDLE_SCAN_INTERVAL_SECONDS = 600  # 10 minutes between scans outside trading hours
+MIN_LIVE_LIQUIDITY_USD = 2500.0  # live orders are ~$2,500; skip markets too thin to absorb them
 
 # Kalshi series tickers to fetch directly (not discoverable via /events)
 CRYPTO_SERIES = ("KXBTC", "KXETH", "KXSOL", "KXXRP")
@@ -115,6 +117,16 @@ class ScannerAgent:
         # Gives the periodic scan a reliable fallback when _crypto_features has a stale
         # or zero-price entry (e.g. a bad tick from Binance.US/Coinbase slipped through).
         self._spot_cache: dict[str, tuple[float, float]] = {}  # symbol -> (spot, vol)
+        self._last_scan_ts: Optional[datetime] = None
+
+    def set_bankroll(self, usdc: float) -> None:
+        """Update bankroll from live account balance. Used by daemon's refresher."""
+        if usdc > 0:
+            self._bankroll = usdc
+
+    @property
+    def last_scan_ts(self) -> Optional[datetime]:
+        return self._last_scan_ts
 
     async def run(self) -> None:
         """Start scanning. Runs until cancelled."""
@@ -185,6 +197,7 @@ class ScannerAgent:
                 await asyncio.sleep(IDLE_SCAN_INTERVAL_SECONDS)
                 continue
             try:
+                self._last_scan_ts = datetime.now(tz=timezone.utc)
                 markets = await self._get_cached_markets(force_refresh=True)
                 crypto_markets = [m for m in markets if _is_crypto_market(m)]
                 logger.info(
@@ -367,6 +380,16 @@ class ScannerAgent:
                 "SCORE skip low_edge: %s | model=%.3f market=%.3f edge=%.3f < %.2f | spot=%.0f strike=%s",
                 market.ticker, model_prob, market.implied_prob, edge, self._min_edge,
                 spot_price, strike_repr,
+            )
+            return None
+
+        if (
+            os.environ.get("EXECUTION_MODE", "paper").lower() == "live"
+            and market.liquidity < MIN_LIVE_LIQUIDITY_USD
+        ):
+            logger.info(
+                "SCORE skip thin_book: %s | liquidity=%.0f < %.0f (live mode)",
+                market.ticker, market.liquidity, MIN_LIVE_LIQUIDITY_USD,
             )
             return None
 

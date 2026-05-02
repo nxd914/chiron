@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from latency.agents.crypto_feed_agent import CryptoFeedAgent
+from strategies.crypto.agents.crypto_feed_agent import CryptoFeedAgent
 
 
 # ---------------------------------------------------------------------------

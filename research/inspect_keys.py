@@ -3,7 +3,7 @@ import asyncio
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from latency.core.kalshi_client import KalshiClient
+from core.kalshi_client import KalshiClient
 
 # Load .env
 repo_root = Path(__file__).resolve().parents[2]

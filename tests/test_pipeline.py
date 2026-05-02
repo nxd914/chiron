@@ -2,7 +2,7 @@
 
 import asyncio
 
-from latency.tools.pipeline import Pipeline
+from tools.pipeline import Pipeline
 
 
 def test_pipeline_no_trade_below_min_edge():

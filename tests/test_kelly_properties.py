@@ -10,7 +10,7 @@ from __future__ import annotations
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
-from latency.core.kelly import (
+from core.kelly import (
     MAX_KELLY_FRACTION,
     MIN_EDGE,
     capped_kelly,

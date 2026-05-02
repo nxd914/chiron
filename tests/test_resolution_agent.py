@@ -13,14 +13,14 @@ import pytest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from latency.agents.resolution_agent import (
+from strategies.crypto.agents.resolution_agent import (
     ResolutionAgent,
     _OpenRow,
     _check_resolution_from_raw,
     _compute_pnl,
     KALSHI_TAKER_FEE_RATE,
 )
-from latency.agents.risk_agent import RiskAgent
+from strategies.crypto.agents.risk_agent import RiskAgent
 
 
 # ---------------------------------------------------------------------------
@@ -240,7 +240,8 @@ async def test_resolve_cycle_handles_none_from_api():
 # _sync_risk_positions — symbol tracking across restarts
 # ---------------------------------------------------------------------------
 
-def test_sync_rebuilds_positions_by_symbol():
+@pytest.mark.asyncio
+async def test_sync_rebuilds_positions_by_symbol():
     """_sync_risk_positions must rebuild _positions_by_symbol, not just _open_positions."""
     risk_agent = RiskAgent(asyncio.Queue(), asyncio.Queue(), bankroll_usdc=100_000.0)
     agent = ResolutionAgent(risk_agent=risk_agent, poll_interval=999)
@@ -251,6 +252,7 @@ def test_sync_rebuilds_positions_by_symbol():
         _open_row(ticker="KXBTC-26APR1416-T1"),
     ]
     agent._load_open_rows = MagicMock(return_value=rows)
+    agent._load_daily_pnl = MagicMock(return_value=0.0)
 
     agent._sync_risk_positions()
 

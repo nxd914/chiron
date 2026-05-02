@@ -17,7 +17,7 @@ import os
 from pathlib import Path
 from typing import Optional, TypedDict
 
-from ..core.kalshi_client import KalshiWebsocketClient, _load_rsa_key
+from core.kalshi_client import KalshiWebsocketClient, _load_rsa_key
 
 logger = logging.getLogger(__name__)
 
@@ -49,10 +49,16 @@ class WebsocketAgent:
     falls back to REST-polled prices from KalshiClient.
     """
 
-    def __init__(self, api_key: str, private_key_path: str) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        private_key_path: str,
+        ws_url: Optional[str] = None,
+    ) -> None:
         self.api_key = api_key
         expanded_path = Path(os.path.expanduser(str(private_key_path))) if private_key_path else None
         self.private_key = _load_rsa_key(expanded_path) if expanded_path else None
+        self.ws_url = ws_url
         self.client: Optional[KalshiWebsocketClient] = None
         self.price_cache: dict[str, PriceSnapshot] = {}
         self._is_running = False
@@ -63,7 +69,7 @@ class WebsocketAgent:
             logger.warning("WebsocketAgent: no private key — real-time price cache disabled.")
             return
 
-        self.client = KalshiWebsocketClient(self.api_key, self.private_key)
+        self.client = KalshiWebsocketClient(self.api_key, self.private_key, ws_url=self.ws_url)
         self._is_running = True
         retry_delay = _INITIAL_RECONNECT_DELAY
 

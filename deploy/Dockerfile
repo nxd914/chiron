@@ -1,27 +1,21 @@
-# Kinzie trading daemon — Python 3.11-slim
 FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    libssl-dev \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y build-essential libssl-dev && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml .
-RUN touch README.md
+COPY pyproject.toml README.md ./
 RUN pip install --no-cache-dir .
 
-# Copy source
 COPY . .
 
-# Runtime config
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
 ENV EXECUTION_MODE=paper
-ENV PYTHONPATH=/app/..
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD python -c "import sys; sys.exit(0)"
+RUN mkdir -p /app/data
 
-CMD ["python", "daemon.py"]
+HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
+    CMD python3 -m research.health_check --quiet 2>/dev/null || exit 0
+
+CMD ["python3", "-m", "strategies.crypto.daemon"]

@@ -13,17 +13,19 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from core.db import connect as db_connect
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-REPO_ROOT   = Path(__file__).parent.parent
-DATA_DIR    = REPO_ROOT / "data"
-DB_PATH     = REPO_ROOT / "data" / "paper_trades.db"
-LOG_PATH    = DATA_DIR / "paper_fund.log"
-PID_PATH    = DATA_DIR / "paper_fund.pid"
-LOG_TAIL    = 200        # lines to read from log
-STALE_HOURS = 2          # alert if no fill in 2+ hours during market hours
+REPO_ROOT    = Path(__file__).parent.parent
+DATA_DIR     = REPO_ROOT / "data"
+DB_PATH      = REPO_ROOT / "data" / "paper_trades.db"
+LOG_PATH     = DATA_DIR / "paper_fund.log"
+PID_PATH     = DATA_DIR / "paper_fund.pid"
+LOG_TAIL     = 200        # lines to read from log
+STALE_HOURS  = 2          # alert if no fill in 2+ hours during market hours
+BANKROLL_USDC = float(os.environ.get("BANKROLL_USDC", "100000.0"))
 
 
 # ── formatting helpers ──────────────────────────────────────────────────────
@@ -35,11 +37,15 @@ def _bar(val: float, total: float, width: int = 20) -> str:
     return "█" * filled + "░" * (width - filled)
 
 
-def _pnl_str(val: float) -> str:
+def _pnl_str(val: float, pct: float | None = None) -> str:
     sign = "+" if val >= 0 else ""
     color = "\033[92m" if val >= 0 else "\033[91m"
     reset = "\033[0m"
-    return f"{color}{sign}${val:.2f}{reset}"
+    base = f"{color}{sign}${val:.2f}{reset}"
+    if pct is None:
+        return base
+    pct_sign = "+" if pct >= 0 else ""
+    return f"{base}  ({color}{pct_sign}{pct:.2f}%{reset})"
 
 
 def _age(ts_str: str) -> str:
@@ -134,7 +140,7 @@ def _db_stats() -> dict:
     if not DB_PATH.exists():
         return result
     try:
-        conn = sqlite3.connect(str(DB_PATH))
+        conn = db_connect(str(DB_PATH))
         # Detect ticker column name
         cols = {r[1] for r in conn.execute("PRAGMA table_info(trades)").fetchall()}
         ticker_col = "ticker" if "ticker" in cols else "condition_id"
@@ -223,9 +229,11 @@ def main() -> int:
     print(f"\n  Process  {proc_icon} {status} ({pid_str})")
 
     # P&L
+    total_pct = db["total_pnl"] / BANKROLL_USDC * 100
+    daily_pct = db["daily_pnl"] / BANKROLL_USDC * 100
     print(f"\n  ── P&L ──────────────────────────────────")
-    print(f"  Total realized P&L : {_pnl_str(db['total_pnl'])}")
-    print(f"  Today's P&L        : {_pnl_str(db['daily_pnl'])}")
+    print(f"  Total realized P&L : {_pnl_str(db['total_pnl'], total_pct)}")
+    print(f"  Today's P&L        : {_pnl_str(db['daily_pnl'], daily_pct)}")
 
     # Trades
     resolved = db["resolved"]

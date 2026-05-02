@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "latency"
+name = "kinzie"
 version = "1.0.0"
-description = "Multi-agent latency arbitrage system for Kalshi crypto binary contracts."
+description = "Multi-strategy quant fund targeting Kalshi prediction market inefficiencies."
 readme = "README.md"
 requires-python = ">=3.11"
 keywords = ["kalshi", "trading", "kelly-criterion", "arbitrage"]
@@ -30,12 +30,8 @@ dev = [
     "structlog",
 ]
 
-[project.scripts]
-latency = "latency.tools.cli:main"
-latency-daemon = "daemon:main"
-
 [tool.hatch.build.targets.wheel]
-packages = ["latency"]
+packages = ["strategies", "core", "tools"]
 
 [tool.ruff]
 target-version = "py311"
@@ -53,7 +49,7 @@ strict = false
 warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
-module = ["core.*"]
+module = ["core.*", "strategies.*"]
 strict = true
 disallow_untyped_defs = true
 
@@ -63,7 +59,7 @@ testpaths = ["tests"]
 addopts = "-q --tb=short"
 
 [tool.coverage.run]
-source = ["core", "agents"]
+source = ["core", "strategies"]
 omit = ["tests/*", "benchmarks/*", "research/*"]
 
 [tool.coverage.report]

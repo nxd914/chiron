@@ -22,14 +22,15 @@ from pathlib import Path
 from typing import Optional
 
 from ..core.config import Config, DEFAULT_CONFIG
-from ..core.kalshi_client import KalshiClient
+from core.db import connect as db_connect
+from core.kalshi_client import KalshiClient
 from .risk_agent import _ticker_to_symbol
 
 logger = logging.getLogger(__name__)
 
 POLL_INTERVAL_SECONDS = 60     # check open positions every minute
 MAX_OPEN_HOURS = 6             # force-resolve positions open longer than this (assume total loss)
-DB_PATH = Path(__file__).parent.parent / "data" / "paper_trades.db"
+DB_PATH = Path(__file__).resolve().parents[3] / "data" / "paper_trades.db"
 
 
 @dataclass
@@ -76,7 +77,7 @@ class ResolutionAgent:
         self._min_fills_for_metrics: int = 20
 
     async def run(self) -> None:
-        self._db = sqlite3.connect(str(self._db_path), check_same_thread=False)
+        self._db = db_connect(str(self._db_path), check_same_thread=False)
         await self._client.open()
         try:
             self._sync_risk_positions()
