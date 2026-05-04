@@ -13,6 +13,15 @@
   Filtering code must use case-insensitive comparison (`lower(environment) IN ('paper','live')`).
 - **`core/db.py`** is the required SQLite WAL helper. It must be present in the Docker
   image. `ModuleNotFoundError: No module named 'core.db'` → image is stale; rebuild and redeploy.
+- **PEM path pitfall.** Local `.env` uses host paths (`/Users/.../kalshi_demo.pem`); the
+  GCE `.env` must use the **container path** for the resolver
+  (`KALSHI_PRIVATE_KEY_PATH_DEMO=/app/kalshi_private.pem`) while the legacy
+  `KALSHI_PRIVATE_KEY_PATH=/opt/kinzie/kalshi_demo.pem` stays as the host path so
+  docker-compose can bind-mount it. Don't blindly `scp .env` from local to GCE — sed
+  the DEMO/LIVE paths to `/app/...` after copying.
+- **Redeploy doesn't delete.** `gcloud compute scp --recurse` copies/overwrites but
+  never deletes. After deleting modules locally, `sudo rm -rf` the same paths on the
+  VM before `systemctl restart kinzie`, or stale code will keep importing.
 
 ## What this is
 
