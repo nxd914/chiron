@@ -61,6 +61,10 @@ class WebsocketAgent:
         self.ws_url = ws_url
         self.client: Optional[KalshiWebsocketClient] = None
         self.price_cache: dict[str, PriceSnapshot] = {}
+        # Account-level fill events delivered sub-second; consumers (e.g.
+        # ResolutionAgent reconciliation, future fill-confirm wiring in
+        # ExecutionAgent) can drain this queue.
+        self.fill_events: asyncio.Queue[dict] = asyncio.Queue(maxsize=1000)
         self._is_running = False
 
     async def run(self) -> None:
@@ -77,8 +81,8 @@ class WebsocketAgent:
             try:
                 logger.info("WebsocketAgent: connecting to Kalshi...")
                 await self.client.connect()
-                await self.client.subscribe(channels=["ticker"])
-                logger.info("WebsocketAgent: subscribed to global ticker channel")
+                await self.client.subscribe(channels=["ticker", "fill"])
+                logger.info("WebsocketAgent: subscribed to channels: ticker, fill")
                 retry_delay = _INITIAL_RECONNECT_DELAY
 
                 while self._is_running:
@@ -97,8 +101,26 @@ class WebsocketAgent:
                 retry_delay = min(_MAX_RECONNECT_DELAY, retry_delay * 2)
 
     def _handle_message(self, msg: dict) -> None:
-        """Parse incoming ticker messages and update the price cache."""
-        if msg.get("type") != "ticker":
+        """Parse incoming WS messages: 'ticker' updates price_cache, 'fill' enqueues."""
+        msg_type = msg.get("type")
+
+        if msg_type == "fill":
+            payload = msg.get("msg") or {}
+            logger.info(
+                "WS fill | %s | %s @ $%s × %s | order=%s",
+                payload.get("market_ticker"),
+                (payload.get("side") or "").upper(),
+                payload.get("yes_price_dollars"),
+                payload.get("count_fp"),
+                payload.get("order_id"),
+            )
+            try:
+                self.fill_events.put_nowait(payload)
+            except asyncio.QueueFull:
+                logger.warning("WS fill_events queue full — dropping event")
+            return
+
+        if msg_type != "ticker":
             return
 
         ticker = msg.get("ticker")

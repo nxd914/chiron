@@ -28,6 +28,7 @@ def spot_to_implied_prob(
     strike: float,
     time_to_expiry_hours: float,
     realized_vol: float,
+    drift: float = 0.0,
 ) -> float:
     """
     Log-normal model probability that price > strike at expiry.
@@ -40,6 +41,9 @@ def spot_to_implied_prob(
         strike:               contract resolution threshold
         time_to_expiry_hours: hours until contract resolves
         realized_vol:         annualized realized volatility
+        drift:                annualized drift (default 0.0 for backward
+                              compatibility). Pass a short-window EWMA of
+                              log-returns when |momentum_z| is large.
 
     Returns:
         Probability in (0, 1)
@@ -49,7 +53,7 @@ def spot_to_implied_prob(
 
     t = max(time_to_expiry_hours, MIN_TIME_TO_EXPIRY_HOURS) / 8760.0  # convert to years; floor prevents d2 singularity
     log_moneyness = math.log(current_price / strike)
-    d2 = (log_moneyness - 0.5 * realized_vol ** 2 * t) / (realized_vol * math.sqrt(t))
+    d2 = (log_moneyness + (drift - 0.5 * realized_vol ** 2) * t) / (realized_vol * math.sqrt(t))
     return _standard_normal_cdf(d2)
 
 
@@ -59,6 +63,7 @@ def bracket_prob(
     cap_strike: float,
     time_to_expiry_hours: float,
     realized_vol: float,
+    drift: float = 0.0,
 ) -> float:
     """
     Log-normal probability that price lands inside [floor, cap] at expiry.
@@ -71,8 +76,12 @@ def bracket_prob(
     """
     if floor_strike >= cap_strike or current_price <= 0:
         return 0.0
-    prob_above_floor = spot_to_implied_prob(current_price, floor_strike, time_to_expiry_hours, realized_vol)
-    prob_above_cap   = spot_to_implied_prob(current_price, cap_strike,   time_to_expiry_hours, realized_vol)
+    prob_above_floor = spot_to_implied_prob(
+        current_price, floor_strike, time_to_expiry_hours, realized_vol, drift=drift
+    )
+    prob_above_cap = spot_to_implied_prob(
+        current_price, cap_strike, time_to_expiry_hours, realized_vol, drift=drift
+    )
     return max(0.0, (prob_above_floor - prob_above_cap) * BRACKET_CALIBRATION)
 
 

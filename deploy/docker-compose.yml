@@ -12,45 +12,6 @@ services:
     environment:
       - KALSHI_PRIVATE_KEY_PATH=/app/kalshi_private.pem
 
-  econ-daemon:
-    build:
-      context: .
-      dockerfile: deploy/Dockerfile
-    command: python3 -m strategies.econ.daemon
-    restart: always
-    env_file: .env
-    volumes:
-      - kinzie-data:/app/data
-      - ${KALSHI_PRIVATE_KEY_PATH:-/dev/null}:/app/kalshi_private.pem:ro
-    environment:
-      - KALSHI_PRIVATE_KEY_PATH=/app/kalshi_private.pem
-
-  sports-daemon:
-    build:
-      context: .
-      dockerfile: deploy/Dockerfile
-    command: python3 -m strategies.sports.daemon
-    restart: always
-    env_file: .env
-    volumes:
-      - kinzie-data:/app/data
-      - ${KALSHI_PRIVATE_KEY_PATH:-/dev/null}:/app/kalshi_private.pem:ro
-    environment:
-      - KALSHI_PRIVATE_KEY_PATH=/app/kalshi_private.pem
-
-  weather-daemon:
-    build:
-      context: .
-      dockerfile: deploy/Dockerfile
-    command: python3 -m strategies.weather.daemon
-    restart: always
-    env_file: .env
-    volumes:
-      - kinzie-data:/app/data
-      - ${KALSHI_PRIVATE_KEY_PATH:-/dev/null}:/app/kalshi_private.pem:ro
-    environment:
-      - KALSHI_PRIVATE_KEY_PATH=/app/kalshi_private.pem
-
 volumes:
   kinzie-data:
     driver: local

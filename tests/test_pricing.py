@@ -48,6 +48,24 @@ def test_spot_to_implied_prob_zero_vol():
     assert below == 0.0
 
 
+def test_spot_to_implied_prob_drift_zero_is_backward_compatible():
+    """drift=0.0 (default) must produce the same result as omitting drift."""
+    args = (80000.0, 70000.0, 24.0, 0.5)
+    assert spot_to_implied_prob(*args) == spot_to_implied_prob(*args, drift=0.0)
+
+
+def test_spot_to_implied_prob_positive_drift_raises_otm_yes_prob():
+    """Positive drift (price expected to rise) should raise P(spot > strike) for OTM strike."""
+    base = spot_to_implied_prob(60000.0, 70000.0, 24.0, 0.5, drift=0.0)
+    drifted = spot_to_implied_prob(60000.0, 70000.0, 24.0, 0.5, drift=2.0)
+    assert drifted > base
+
+
+def test_bracket_prob_drift_zero_is_backward_compatible():
+    args = (75000.0, 74500.0, 75500.0, 1.0, 0.80)
+    assert bracket_prob(*args) == bracket_prob(*args, drift=0.0)
+
+
 def test_bracket_prob_spot_inside_range():
     # Spot at 75000, bracket [74500, 75500], 1 hour, 80% vol
     # $1000-wide range centered on spot; high prob since range > 1-hour σ

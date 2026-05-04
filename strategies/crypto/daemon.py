@@ -56,6 +56,7 @@ logger = logging.getLogger(__name__)
 
 TRACKED_SYMBOLS: list[str] = os.environ.get("TRACKED_SYMBOLS", "BTC,ETH").split(",")
 BANKROLL_USDC = float(os.environ.get("BANKROLL_USDC", "100000.0"))
+ORDER_GROUP_LIMIT = int(os.environ.get("ORDER_GROUP_CONTRACTS_LIMIT", "300"))
 _SHUTDOWN_TIMEOUT_SECONDS = 10.0
 _PID_PATH = Path(__file__).resolve().parents[2] / "data" / "paper_fund.pid"
 _WATCHDOG_CHECK_SECONDS = 300    # check scanner health every 5 min
@@ -175,11 +176,33 @@ async def main() -> None:
         bankroll_usdc=BANKROLL_USDC,
         config=config,
     )
+    # Exchange-side runaway protection: rolling 15s matched-contracts cap.
+    order_group_id: str | None = None
+    try:
+        async with KalshiClient(
+            api_key=env.api_key,
+            private_key_path=env.private_key_path,
+            base_url=env.rest_base_url,
+        ) as bootstrap_client:
+            order_group_id = await bootstrap_client.create_order_group(ORDER_GROUP_LIMIT)
+        if order_group_id:
+            logger.info(
+                "Order group created: id=%s | rolling 15s cap=%d contracts",
+                order_group_id,
+                ORDER_GROUP_LIMIT,
+            )
+        else:
+            logger.warning("Order group creation returned no id — orders will not be group-bound.")
+    except Exception as exc:
+        logger.warning("Order group creation failed: %s — proceeding without group binding.", exc)
+
     execution = ExecutionAgent(
         approved_queue=approved_queue,
         risk_agent=risk,
         environment=env,
     )
+    if order_group_id:
+        execution._order_group_id = order_group_id  # type: ignore[attr-defined]
     resolver = ResolutionAgent(risk_agent=risk)
 
     tasks = [
@@ -193,22 +216,21 @@ async def main() -> None:
         asyncio.create_task(_watchdog(scanner), name="watchdog"),
     ]
 
-    if env.place_real_orders:
-        tasks.append(
-            asyncio.create_task(
-                _guarded(
-                    _bankroll_refresher(
-                        risk=risk,
-                        scanner=scanner,
-                        api_key=env.api_key,
-                        private_key_path=env.private_key_path,
-                        base_url=env.rest_base_url,
-                    ),
-                    "bankroll_refresher",
+    tasks.append(
+        asyncio.create_task(
+            _guarded(
+                _bankroll_refresher(
+                    risk=risk,
+                    scanner=scanner,
+                    api_key=env.api_key,
+                    private_key_path=env.private_key_path,
+                    base_url=env.rest_base_url,
                 ),
-                name="bankroll_refresher",
-            )
+                "bankroll_refresher",
+            ),
+            name="bankroll_refresher",
         )
+    )
 
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):

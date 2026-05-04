@@ -288,34 +288,38 @@ class KalshiClient:
     async def place_limit_order(
         self,
         ticker: str,
-        side: str,           # "yes" or "no"
-        count: int,          # number of contracts (each = $0.01 face value)
-        yes_price_cents: int,  # limit price for YES side in cents (1–99)
+        side: str,                   # "yes" or "no"
+        count: int,                  # number of contracts
+        yes_price_dollars: float,    # YES limit price in dollars (e.g. 0.65)
+        order_group_id: Optional[str] = None,
+        time_in_force: str = "good_till_canceled",
     ) -> dict:
         """
-        Place a limit order on Kalshi.
+        Place a limit buy order on Kalshi via V2 fixed-point dollar fields.
 
-        Args:
-            ticker:           market ticker (e.g. "KXFED-25MAY-T5.25")
-            side:             "yes" or "no"
-            count:            number of contracts
-            yes_price_cents:  limit price for YES in cents (e.g. 65 = $0.65)
+        Legacy integer-cents fields (yes_price/no_price/count) are deprecated;
+        we send count_fp + yes_price_dollars per the V2 schema.
 
-        Returns raw API response dict.
+        Optional order_group_id ties the order to a rolling matched-contracts
+        cap created at daemon startup — exchange-side runaway protection.
         """
         if not self.authenticated:
             raise RuntimeError(
                 "KalshiClient: auth not configured. "
                 "Set KALSHI_API_KEY and KALSHI_PRIVATE_KEY_PATH."
             )
-        payload = {
+        # Clamp to 0.01-0.99 ($0.01-$0.99) and round to 4dp
+        price = max(0.01, min(0.99, float(yes_price_dollars)))
+        payload: dict = {
             "ticker": ticker,
             "action": "buy",
             "side": side,
-            "count": count,
-            "type": "limit",
-            "yes_price": yes_price_cents,
+            "count_fp": f"{int(count)}.00",
+            "yes_price_dollars": f"{price:.4f}",
+            "time_in_force": time_in_force,
         }
+        if order_group_id:
+            payload["order_group_id"] = order_group_id
         return await self._post("/portfolio/orders", payload)
 
     async def cancel_order(self, order_id: str) -> dict:
@@ -323,6 +327,29 @@ class KalshiClient:
         if not self.authenticated:
             raise RuntimeError("KalshiClient: auth required for cancel_order()")
         return await self._delete(f"/portfolio/orders/{order_id}")
+
+    async def create_order_group(self, contracts_limit: int) -> Optional[str]:
+        """
+        Create an order group with a rolling 15-second matched-contracts cap.
+
+        Exchange-side runaway protection: if the daemon fires too many
+        contracts in 15s (e.g. a pricing bug), Kalshi auto-cancels every
+        order in the group and refuses new ones until reset.
+
+        Returns the new order_group_id, or None on failure (caller should
+        proceed without group binding rather than refuse to start).
+        """
+        if not self.authenticated:
+            raise RuntimeError("KalshiClient: auth required for create_order_group()")
+        resp = await self._post(
+            "/portfolio/order_groups/create",
+            {"subaccount": 0, "contracts_limit": int(contracts_limit)},
+        )
+        gid = resp.get("order_group_id")
+        if not gid:
+            logger.warning("create_order_group: no id in response: %s", resp)
+            return None
+        return gid
 
     # ------------------------------------------------------------------
     # HTTP layer

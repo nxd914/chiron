@@ -5,7 +5,6 @@ Receives approved (opportunity, size_usdc) pairs from the risk agent
 and places orders on Kalshi via the authenticated API.
 
 Modes (resolved by core.environment.resolve_environment):
-  LOCAL_SIM  — synthesizes fills at market ask, no network. Logs to SQLite.
   PAPER      — places real orders against the Kalshi DEMO API.
   LIVE       — places real orders against the Kalshi PRODUCTION API.
 
@@ -18,7 +17,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import sqlite3
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -49,11 +47,7 @@ class ExecutionAgent:
         self._env = environment or resolve_environment()
         self._db = self._init_db()
         self._kalshi: Optional[KalshiClient] = None
-        logger.info(
-            "ExecutionAgent ready | mode=%s | place_real_orders=%s",
-            self._env.label,
-            self._env.place_real_orders,
-        )
+        logger.info("ExecutionAgent ready | mode=%s", self._env.label)
 
     async def run(self) -> None:
         while True:
@@ -71,27 +65,7 @@ class ExecutionAgent:
     async def _execute(
         self, opp: TradeOpportunity, size_usdc: float
     ) -> Order:
-        if self._env.place_real_orders:
-            return await self._live_order(opp, size_usdc)
-        return self._sim_order(opp, size_usdc)
-
-    def _sim_order(self, opp: TradeOpportunity, size_usdc: float) -> Order:
-        """Synthesize a fill at current market ask (local_sim mode, no network)."""
-        fill_price = (
-            opp.market.yes_ask
-            if opp.side == Side.YES
-            else opp.market.no_ask
-        )
-        now = datetime.now(tz=timezone.utc)
-        return Order(
-            opportunity=opp,
-            size_usdc=size_usdc,
-            status=OrderStatus.FILLED,
-            fill_price=fill_price,
-            placed_at=now,
-            filled_at=now,
-            order_id=f"sim_{uuid.uuid4().hex[:12]}",
-        )
+        return await self._live_order(opp, size_usdc)
 
     async def _live_order(self, opp: TradeOpportunity, size_usdc: float) -> Order:
         if self._kalshi is None:
@@ -111,11 +85,11 @@ class ExecutionAgent:
 
         if opp.side == Side.YES:
             fill_price = opp.market.yes_ask
-            yes_price_cents = max(1, min(99, round(fill_price * 100)))
+            yes_price_dollars = max(0.01, min(0.99, fill_price))
         else:
             fill_price = opp.market.no_ask
-            no_price_cents = max(1, min(99, round(fill_price * 100)))
-            yes_price_cents = 100 - no_price_cents
+            no_price_dollars = max(0.01, min(0.99, fill_price))
+            yes_price_dollars = 1.0 - no_price_dollars
 
         count = max(1, int(size_usdc / fill_price))
 
@@ -124,7 +98,8 @@ class ExecutionAgent:
                 ticker=opp.market.ticker,
                 side=opp.side.value.lower(),
                 count=count,
-                yes_price_cents=yes_price_cents,
+                yes_price_dollars=yes_price_dollars,
+                order_group_id=getattr(self, "_order_group_id", None),
             )
         except Exception as exc:
             logger.error("Live order failed for %s: %s", opp.market.ticker, exc)
