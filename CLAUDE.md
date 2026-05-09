@@ -27,21 +27,21 @@ Do not refactor. Do not theorize. Do not wait for data. Fix it now and ship it.
 
 | Knob | Current | Push to fill more | Push for better edge |
 |---|---|---|---|
-| `min_edge` | **0.015** | Lower to 0.010 | Raise to 0.03 |
-| `min_return_on_risk` | **0.08** | Lower to 0.05 | Raise to 0.12 |
+| `min_edge` | **0.020** | Lower to 0.015 | Raise to 0.03 |
+| `min_return_on_risk` | **0.12** | Lower to 0.08 | Raise to 0.15 |
 | `max_hours_to_close` | **12** | Raise to 24 | Lower to 6 |
 | `max_concurrent_positions` | **5** | Raise to 8 | Keep at 5 |
 | `execution_fill_grace_seconds` | **30** | Raise to 45 | Lower to 15 |
-| `execution_cross_offset_max` | **0.10** | Raise to 0.15 | Lower to 0.05 |
+| `execution_cross_offset_max` | **0.08** | Raise to 0.12 | Lower to 0.05 |
 | `bracket_calibration` | **0.62** | Raise to 0.70 | Lower to 0.50 |
 | `max_drift_annualized` | **5.0** | Raise to 8.0 | Lower to 3.0 |
-| `min_disagreement` | **0.003**| Lower to 0.002 | Raise to 0.008 |
+| `min_disagreement` | **0.005**| Lower to 0.003 | Raise to 0.008 |
 *(Omitted caps/cooldowns: tune only if structurally necessary)*
 
 ## RISK GATES (Scanner & RiskAgent)
 1. **Disagreement / Drift Sign**: Reject if signal lacks momentum or opposes side.
 2. **Price Caps**: Reject YES > 40¢, NO > 70¢. Bracket NO > 70¢, Bracket YES > 30¢. NO Floor < 40¢.
-3. **Return on risk**: `edge / market_price < 0.10` → reject.
+3. **Return on risk**: `edge / market_price < 0.12` → reject.
 4. **Dynamic breakeven**: `edge < fee(P) + max(0.005, spread×price/2)` → reject.
 5. **15M Contract Cap**: Max 20 contracts per KXBTC15M/KXETH15M position.
 

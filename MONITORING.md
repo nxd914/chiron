@@ -10,7 +10,7 @@ $GCE 'sudo docker exec kinzie-daemon-1 python3 -m research.live_roi'
 ```
 
 **Key metrics to watch:**
-- Win rate (target >50% with current edge)
+- Win rate (target >55% with current edge)
 - Today P&L vs bankroll basis
 - Cumulative settled P&L trend
 - Per-family (BTC/ETH/SOL) breakdown
@@ -35,10 +35,10 @@ SCAN_CYCLE skips (total=120 passed=8): too_far_out=45 | low_edge=38 | bracket_no
 
 | Dominant Skip | Meaning | Suggested Action |
 |--------------|---------|------------------|
-| `low_edge` | Model edge < 0.015 threshold | Lower `min_edge` to 0.010 OR raise `bracket_calibration` to 0.65-0.70 |
-| `kelly_zero` | Model prob too close to market price | Edge fine but Kelly won't size — raise `min_edge` slightly to 0.018-0.020 |
-| `below_breakeven` | Edge doesn't cover fees + slippage | Revisit spread calculation OR raise `execution_cross_offset_max` to 0.15 |
-| `low_disagreement` | Drift effect < 0.003 threshold | Already aggressive at 0.003 — monitor before lowering further |
+| `low_edge` | Model edge < 0.020 threshold | Lower `min_edge` to 0.015 only if P&L is positive but fills are too low |
+| `kelly_zero` | Model prob too close to market price | Keep `min_edge` at 0.020 and wait for cleaner opportunities |
+| `below_breakeven` | Edge doesn't cover fees + slippage | Investigate spread calculation; do not widen `execution_cross_offset_max` while P&L is negative |
+| `low_disagreement` | Drift effect < 0.005 threshold | Lower to 0.003 only if win rate stays >55% and fills are too low |
 | `too_far_out` | Contract > 12h to expiry | Already widened to 12h — monitor edge on long-dated books before extending |
 | `bracket_no_too_expensive` | NO ask > 70¢ | **DO NOT loosen** — price cap protects against ruin |
 | `bracket_yes_too_expensive` | YES ask > 30¢ | **DO NOT loosen** — inverted risk/reward |
@@ -53,9 +53,9 @@ SCAN_CYCLE skips (total=120 passed=8): too_far_out=45 | low_edge=38 | bracket_no
 - Do NOT adjust knobs yet — need statistical sample
 
 **Hour 6-24 (First assessment):**
-- If `low_edge` > 40% of skips → lower `min_edge` to 0.010
-- If `kelly_zero` > 30% of skips → raise `min_edge` to 0.018
-- If win rate < 40% with >20 fills → tighten `min_return_on_risk` to 0.10
+- If `low_edge` > 40% of skips and P&L is positive → lower `min_edge` to 0.015
+- If `kelly_zero` > 30% of skips → keep current quality filter; do not loosen while P&L is negative
+- If win rate < 55% with >20 fills → tighten `min_return_on_risk` to 0.15
 
 **Hour 24-48 (Validation):**
 - Confirm adjustment improved fill rate without collapsing win rate
@@ -68,7 +68,7 @@ SCAN_CYCLE skips (total=120 passed=8): too_far_out=45 | low_edge=38 | bracket_no
 ```bash
 # Immediate tightening (deploy via env vars)
 $GCE 'sudo systemctl restart kinzie'
-# With MIN_EDGE=0.020 MIN_RETURN_ON_RISK=0.12 in container env
+# With MIN_EDGE=0.030 MIN_RETURN_ON_RISK=0.15 in container env
 ```
 
 **Daily loss approaches -20% circuit breaker:**

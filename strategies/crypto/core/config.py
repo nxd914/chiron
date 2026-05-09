@@ -23,8 +23,8 @@ class Config:
     # Full Kelly requires perfect probability estimates; 0.25× is standard for
     # research-grade systems where edge is unverified at scale.
 
-    min_edge: float = 0.015
-    # Ask-based edge; 0.015 aggressive fill push (2026-05-09 deploy).
+    min_edge: float = 0.020
+    # Ask-based edge; 0.020 quality filter after fees/slippage losses.
 
     min_kelly: float = 0.01
     # Minimum Kelly fraction. Below 1% of bankroll, transaction costs dominate.
@@ -64,9 +64,9 @@ class Config:
     # expiry are correlated: if price lands in either bracket, one must lose. Default
     # of 1 ensures we take only the highest-edge bracket per hour.
 
-    max_signal_age_seconds: float = 30.0
+    max_signal_age_seconds: float = 60.0
     # Freshness gate. The scanner has a 5s burst cooldown before evaluating a
-    # signal, so 2s was unreachable. 30s keeps signals current (Kalshi prices
+    # signal, so 2s was unreachable. 60s keeps signals current (Kalshi prices
     # reprice on the order of minutes, not seconds) while discarding truly stale
     # signals from queue backup. Periodic-scan opportunities use synthetic
     # signals timestamped at evaluation time and always pass this gate.
@@ -85,8 +85,8 @@ class Config:
     # YES-side fill cap. Only take YES bets at 40¢ or below — risk $0.40
     # to win $0.60 (1.5:1 for). Favorable risk/reward.
 
-    min_return_on_risk: float = 0.08
-    # Edge / market_price floor; 0.08 favors fill rate vs 0.10 (caps unchanged).
+    min_return_on_risk: float = 0.12
+    # Edge / market_price floor; 0.12 favors quality after negative paper P&L.
 
     ticker_reject_cooldown_seconds: int = 120
     # After Kalshi rejects a ticker, don't re-attempt for 2 minutes.
@@ -154,8 +154,8 @@ class Config:
     min_live_liquidity_usd: float = 2500.0
     # Skip markets too thin to absorb our orders (live mode only).
 
-    min_disagreement: float = 0.003
-    # Signal scans: min |p_drift − p_zero|; lower → more momentum passes.
+    min_disagreement: float = 0.005
+    # Signal scans: min |p_drift − p_zero|; stronger momentum confirmation.
 
     trading_start_hour_utc: int = 0
     trading_end_hour_utc: int = 24
@@ -226,11 +226,11 @@ class Config:
 
     execution_fill_poll_interval_seconds: float = 1.0
 
-    execution_cross_offset_max: float = 0.12
+    execution_cross_offset_max: float = 0.08
     execution_cross_offset_min: float = 0.01
     # Cross-the-spread bounds applied in ExecutionAgent. The limit price is
-    # base_ask + clamp(edge*0.5, min, max). Raising max from 5¢→10¢ unblocks
-    # thin 15m Up/Down books where 5¢ above the cached ask still didn't cross.
+    # base_ask + clamp(edge*0.5, min, max). 8¢ max limits slippage after
+    # negative paper P&L while still crossing thin books.
 
     min_fill_register_usd: float = 1.0
     # Minimum WS-fill cost (USD) to register as a real position with RiskAgent.
