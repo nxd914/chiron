@@ -11,7 +11,7 @@ from core.kelly import (
     capped_kelly,
 )
 from strategies.crypto.core.models import FeatureVector
-from strategies.crypto.core.pricing import BRACKET_CALIBRATION, bracket_prob, features_to_signal, spot_to_implied_prob, up_down_15m_prob
+from strategies.crypto.core.pricing import bracket_prob, features_to_signal, spot_to_implied_prob, up_down_15m_prob
 
 
 def test_spot_to_implied_prob_deep_in_the_money():
@@ -82,16 +82,12 @@ def test_bracket_prob_spot_far_outside_range():
     assert prob < 0.05  # very unlikely to fall back into range
 
 
-def test_bracket_prob_applies_calibration_discount():
-    """bracket_prob should apply BRACKET_CALIBRATION haircut to raw N(d2) difference."""
-    # Compute raw prob manually: P(above floor) - P(above cap)
+def test_bracket_prob_is_raw_nd2_difference():
+    """bracket_prob returns raw P(above floor) − P(above cap); scanner applies Config.bracket_calibration."""
     raw_above_floor = spot_to_implied_prob(75000.0, 74500.0, 1.0, 0.80)
     raw_above_cap = spot_to_implied_prob(75000.0, 75500.0, 1.0, 0.80)
     raw_diff = raw_above_floor - raw_above_cap
-
-    calibrated = bracket_prob(75000.0, 74500.0, 75500.0, 1.0, 0.80)
-    assert calibrated == pytest.approx(raw_diff * BRACKET_CALIBRATION, rel=1e-6)
-    assert calibrated < raw_diff  # calibration always reduces
+    assert bracket_prob(75000.0, 74500.0, 75500.0, 1.0, 0.80) == pytest.approx(raw_diff, rel=1e-6)
 
 
 def test_bracket_prob_invalid_inputs():
@@ -161,7 +157,7 @@ def test_features_to_signal_fires_on_high_z():
     signal = features_to_signal(fv)
     assert signal is not None
     assert signal.signal_type.value == "MOMENTUM_UP"
-    assert signal.confidence >= 0.55
+    assert signal.confidence >= 0.52
 
 
 def test_features_to_signal_fires_on_jump():

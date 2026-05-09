@@ -23,10 +23,8 @@ class Config:
     # Full Kelly requires perfect probability estimates; 0.25× is standard for
     # research-grade systems where edge is unverified at scale.
 
-    min_edge: float = 0.02
-    # Lowered 0.035→0.02 (2026-05-07). Edge is now computed against the ask
-    # (actual cost) instead of the mid. Old mid-based calc overstated edge
-    # by half the spread; at 0.035 virtually nothing passed.
+    min_edge: float = 0.015
+    # Ask-based edge; 0.015 aggressive fill push (2026-05-09 deploy).
 
     min_kelly: float = 0.01
     # Minimum Kelly fraction. Below 1% of bankroll, transaction costs dominate.
@@ -35,13 +33,10 @@ class Config:
     # Per-contract fee from Kalshi fee schedule (PDF).
     # Formula: fee = 0.07 × P × (1-P) per contract (parabolic, max at P=0.5).
 
-    estimated_slippage: float = 0.005
-    # Per-side slippage estimate (price units). 0.5¢ = half-tick avg rounding cost.
-    # Used in RiskAgent's breakeven gate: edge must exceed fee + slippage or the
-    # trade is rejected before sizing. Recalibrate from demo fills once N >= 50.
+
 
     # ── Risk limits ─────────────────────────────────────────────────────────
-    max_concurrent_positions: int = 5
+    max_concurrent_positions: int = 7
     # Portfolio-level concurrency. At $5k bankroll with 10% max per position,
     # 5 positions = 50% max deployed capital. Leaves margin for adverse moves.
 
@@ -90,10 +85,8 @@ class Config:
     # YES-side fill cap. Only take YES bets at 40¢ or below — risk $0.40
     # to win $0.60 (1.5:1 for). Favorable risk/reward.
 
-    min_return_on_risk: float = 0.10
-    # Edge / market_price must exceed 10%. A 3.5pp edge on a 99¢ NO is 3.5%
-    # RoR — erased by ~1pp model error. Same edge on 50¢ = 7% RoR. Closes
-    # the asymmetry that produced the 99¢ bracket-NO fills.
+    min_return_on_risk: float = 0.08
+    # Edge / market_price floor; 0.08 favors fill rate vs 0.10 (caps unchanged).
 
     ticker_reject_cooldown_seconds: int = 120
     # After Kalshi rejects a ticker, don't re-attempt for 2 minutes.
@@ -117,27 +110,21 @@ class Config:
     scan_startup_delay_seconds: int = 15
     # Brief warmup before first scan so feature windows accumulate enough ticks.
 
-    scan_concurrency: int = 8
+    scan_concurrency: int = 12
     # Semaphore cap for parallel market evaluation.
 
     scan_limit: int = 200
     # Max markets per periodic scan. Reconciled 50→200 to match scanner's
     # module constant; the old 50 was stale.
 
-    signal_candidate_limit: int = 400
-    # Wider market fetch for signal-triggered scans.
-    # Reconciled 120→400 to match scanner's SIGNAL_SCAN_CANDIDATE_LIMIT.
-
     signal_scan_candidate_limit: int = 400
-    # Alias for scanner call site (mirrors scanner module constant name).
+    # Wider market fetch for signal-triggered scans (cache refresh limit).
 
     min_time_to_close_minutes: int = 5
     # Skip markets with less than 5 minutes to settlement.
 
-    max_hours_to_close: int = 8
-    # Skip markets closing more than 8 hours out. Bumped 4→6→8 (2026-05-07).
-    # 4-8h contracts are where drift has the most predictive power.
-    # Was 49% of all skips at the old 4h threshold.
+    max_hours_to_close: int = 12
+    # Widen horizon to cut too_far_out skips; monitor edge on long-dated books.
 
     signal_cooldown_seconds: int = 2
     # Rate limit on signal-triggered scan. Reconciled 5→2 to match scanner.
@@ -155,8 +142,8 @@ class Config:
     max_bracket_near_spot_pct: float = 0.015
     # YES brackets only allowed within 1.5% of spot.
 
-    min_bracket_distance_pct: float = 0.003
-    # Skip brackets where spot is within 0.3% of the bracket midpoint.
+    min_bracket_distance_pct: float = 0.0025
+    # Slightly tighter ATM skip → more bracket candidates.
 
     enable_brackets: bool = True
     # Enable bracket contract scanning.
@@ -167,8 +154,8 @@ class Config:
     min_live_liquidity_usd: float = 2500.0
     # Skip markets too thin to absorb our orders (live mode only).
 
-    min_disagreement: float = 0.005
-    # Minimum |model_prob - p_zero| (drift vs no-drift). 0.5pp.
+    min_disagreement: float = 0.003
+    # Signal scans: min |p_drift − p_zero|; lower → more momentum passes.
 
     trading_start_hour_utc: int = 0
     trading_end_hour_utc: int = 24
@@ -192,8 +179,8 @@ class Config:
     # Minimum observations before emitting features. Prevents cold-start trading
     # with statistically meaningless vol estimates.
 
-    jump_return_threshold: float = 0.002
-    # 0.2% return in short window triggers jump detection.
+    jump_return_threshold: float = 0.0018
+    # Slightly more sensitive jump detect → more signal-triggered scans.
 
     # ── Drift / EWMA ────────────────────────────────────────────────────────
     ewma_short_half_life_s: float = 15.0
@@ -202,17 +189,13 @@ class Config:
     ewma_long_half_life_s: float = 300.0
     # 5min half-life for ≥1h contracts.
 
-    max_drift_annualized: float = 5.0
-    # Cap |drift| at ±500%/yr. Raised 2.0→5.0 — crypto regularly exceeds
-    # 200%/yr during momentum moves; old cap truncated the signal.
+    max_drift_annualized: float = 7.0
+    # Cap |drift| fed into pricing; higher lets strong trends express in model_prob.
 
     # ── Pricing ─────────────────────────────────────────────────────────────
-    bracket_calibration: float = 0.55
-    # Multiplicative haircut applied to bracket_prob output.
-    # See docs/CALIBRATION.md for derivation. Short version: the log-normal model
-    # overestimates narrow bracket probabilities by ~45% empirically. Tuned from
-    # a single paper loss event (model=0.81, market=0.51 on ATM bracket).
-    # Needs 50+ fills to validate statistically.
+    bracket_calibration: float = 0.62
+    # Applied in scanner to raw bracket_prob (both p_drift and p_zero). Higher
+    # = less haircut vs 0.55 → more bracket YES edge when model runs hot.
 
     min_time_to_expiry_hours: float = 1.0 / 60.0
     # 1-minute floor on time-to-expiry in BS formula. Prevents d2 singularity as
@@ -220,11 +203,11 @@ class Config:
     # scan and execution timing.
 
     # ── Signal detection ────────────────────────────────────────────────────
-    momentum_z_threshold: float = 2.0
-    # Z-score threshold to fire a momentum signal (2 sigma).
+    momentum_z_threshold: float = 1.75
+    # Z-score to fire momentum (FeatureAgent + features_to_signal).
 
-    min_confidence: float = 0.55
-    # Minimum confidence to propagate a signal downstream.
+    min_confidence: float = 0.52
+    # Minimum confidence to emit a signal downstream.
 
     # ── Performance metrics ─────────────────────────────────────────────────
     assumed_fills_per_day: int = 4
@@ -234,7 +217,7 @@ class Config:
     # this assumption at low sample counts.
 
     # ── Execution ───────────────────────────────────────────────────────────
-    execution_fill_grace_seconds: float = 30.0
+    execution_fill_grace_seconds: float = 40.0
     # Kalshi V2 limit orders fill asynchronously. After POST we poll
     # get_order(order_id) up to this many seconds; cancel if still unfilled.
     # Required: a synchronous fill_count==0 check would cancel every order
@@ -243,7 +226,7 @@ class Config:
 
     execution_fill_poll_interval_seconds: float = 1.0
 
-    execution_cross_offset_max: float = 0.10
+    execution_cross_offset_max: float = 0.12
     execution_cross_offset_min: float = 0.01
     # Cross-the-spread bounds applied in ExecutionAgent. The limit price is
     # base_ask + clamp(edge*0.5, min, max). Raising max from 5¢→10¢ unblocks
@@ -290,7 +273,7 @@ class Config:
             min_edge=_float("MIN_EDGE", base.min_edge),
             min_kelly=_float("MIN_KELLY", base.min_kelly),
             kalshi_taker_fee_rate=_float("KALSHI_TAKER_FEE_RATE", base.kalshi_taker_fee_rate),
-            estimated_slippage=_float("ESTIMATED_SLIPPAGE", base.estimated_slippage),
+            # estimated_slippage removed
             max_concurrent_positions=_int("MAX_CONCURRENT_POSITIONS", base.max_concurrent_positions),
             max_daily_loss_pct=_float("MAX_DAILY_LOSS_PCT", base.max_daily_loss_pct),
             max_single_exposure_pct=_float("MAX_SINGLE_EXPOSURE_PCT", base.max_single_exposure_pct),
@@ -310,8 +293,10 @@ class Config:
             scan_startup_delay_seconds=_int("SCAN_STARTUP_DELAY_SECONDS", base.scan_startup_delay_seconds),
             scan_concurrency=_int("SCAN_CONCURRENCY", base.scan_concurrency),
             scan_limit=_int("SCAN_LIMIT", base.scan_limit),
-            signal_candidate_limit=_int("SIGNAL_CANDIDATE_LIMIT", base.signal_candidate_limit),
-            signal_scan_candidate_limit=_int("SIGNAL_SCAN_CANDIDATE_LIMIT", base.signal_scan_candidate_limit),
+            signal_scan_candidate_limit=_int(
+                "SIGNAL_SCAN_CANDIDATE_LIMIT",
+                _int("SIGNAL_CANDIDATE_LIMIT", base.signal_scan_candidate_limit),
+            ),
             min_time_to_close_minutes=_int("MIN_TIME_TO_CLOSE_MINUTES", base.min_time_to_close_minutes),
             max_hours_to_close=_int("MAX_HOURS_TO_CLOSE", base.max_hours_to_close),
             signal_cooldown_seconds=_int("SIGNAL_COOLDOWN_SECONDS", base.signal_cooldown_seconds),
@@ -320,15 +305,25 @@ class Config:
             max_bracket_no_price=_float("MAX_BRACKET_NO_PRICE", base.max_bracket_no_price),
             max_bracket_near_spot_pct=_float("MAX_BRACKET_NEAR_SPOT_PCT", base.max_bracket_near_spot_pct),
             min_bracket_distance_pct=_float("MIN_BRACKET_DISTANCE_PCT", base.min_bracket_distance_pct),
-            enable_brackets=base.enable_brackets,
             horizon_15m_hours=_float("HORIZON_15M_HOURS", base.horizon_15m_hours),
             min_live_liquidity_usd=_float("MIN_LIVE_LIQUIDITY_USD", base.min_live_liquidity_usd),
             min_disagreement=_float("MIN_DISAGREEMENT", base.min_disagreement),
+            trading_start_hour_utc=_int("TRADING_START_HOUR_UTC", base.trading_start_hour_utc),
+            trading_end_hour_utc=_int("TRADING_END_HOUR_UTC", base.trading_end_hour_utc),
+            enable_brackets=(
+                base.enable_brackets
+                if os.environ.get("ENABLE_BRACKETS") is None
+                else os.environ["ENABLE_BRACKETS"].lower() in ("1", "true", "yes")
+            ),
             idle_scan_interval_seconds=_int("IDLE_SCAN_INTERVAL_SECONDS", base.idle_scan_interval_seconds),
             ewma_short_half_life_s=_float("EWMA_SHORT_HALF_LIFE_S", base.ewma_short_half_life_s),
             ewma_long_half_life_s=_float("EWMA_LONG_HALF_LIFE_S", base.ewma_long_half_life_s),
             max_drift_annualized=_float("MAX_DRIFT_ANNUALIZED", base.max_drift_annualized),
             bracket_calibration=_float("BRACKET_CALIBRATION", base.bracket_calibration),
+            min_time_to_expiry_hours=_float("MIN_TIME_TO_EXPIRY_HOURS", base.min_time_to_expiry_hours),
+            momentum_z_threshold=_float("MOMENTUM_Z_THRESHOLD", base.momentum_z_threshold),
+            min_confidence=_float("MIN_CONFIDENCE", base.min_confidence),
+            jump_return_threshold=_float("JUMP_RETURN_THRESHOLD", base.jump_return_threshold),
             assumed_fills_per_day=_int("ASSUMED_FILLS_PER_DAY", base.assumed_fills_per_day),
             min_fills_for_live=_int("MIN_FILLS_FOR_LIVE", base.min_fills_for_live),
             min_sharpe_for_live=_float("MIN_SHARPE_FOR_LIVE", base.min_sharpe_for_live),

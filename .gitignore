@@ -37,6 +37,7 @@ data/
 .DS_Store
 
 # Test artifacts
+.hypothesis/
 .pytest_cache/
 .coverage
 htmlcov/

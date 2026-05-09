@@ -13,13 +13,15 @@ from __future__ import annotations
 import math
 from datetime import datetime, timezone
 
+from typing import Optional
+
+from .config import DEFAULT_CONFIG, Config
 from .models import FeatureVector, Signal, SignalType
 
-# Thresholds for signal generation
-JUMP_RETURN_THRESHOLD = 0.002   # 0.2% return in short window → potential jump
-MOMENTUM_Z_THRESHOLD = 2.0      # z-score threshold to fire signal
-MIN_CONFIDENCE = 0.55           # minimum confidence to pass signal downstream
-BRACKET_CALIBRATION = 0.45      # haircut for bracket prob. Lowered 0.55→0.45 after live data showed phantom 15-17% edge on ATM strikes that Kalshi MMs would not match.
+# Fallbacks when features_to_signal is called without an explicit Config.
+JUMP_RETURN_THRESHOLD = 0.002
+MOMENTUM_Z_THRESHOLD = 2.0
+MIN_CONFIDENCE = 0.55
 MIN_TIME_TO_EXPIRY_HOURS = 1.0 / 60.0  # 1-minute floor; prevents d2 singularity as t→0 (scanner guards at 5min but race condition exists between scan and execution)
 
 
@@ -102,7 +104,7 @@ def bracket_prob(
     prob_above_cap = spot_to_implied_prob(
         current_price, cap_strike, time_to_expiry_hours, realized_vol, drift=drift
     )
-    return max(0.0, (prob_above_floor - prob_above_cap) * BRACKET_CALIBRATION)
+    return max(0.0, prob_above_floor - prob_above_cap)
 
 
 PROB_FLOOR = 0.001  # clamp N(d2) tails to suppress float-underflow phantom edge on far-OTM/ITM strikes
@@ -114,7 +116,10 @@ def _standard_normal_cdf(x: float) -> float:
     return min(1.0 - PROB_FLOOR, max(PROB_FLOOR, p))
 
 
-def features_to_signal(features: FeatureVector) -> Signal | None:
+def features_to_signal(
+    features: FeatureVector,
+    config: Optional[Config] = None,
+) -> Signal | None:
     """
     Deterministic decision rule: FeatureVector → Signal or None.
 
@@ -122,10 +127,13 @@ def features_to_signal(features: FeatureVector) -> Signal | None:
       - A jump is detected, OR
       - Momentum z-score exceeds threshold
 
-    Confidence is a normalized function of z-score magnitude.
-    No learned parameters — all thresholds are domain-reasoned constants.
+    Thresholds come from ``config`` when provided (daemon path); else ``DEFAULT_CONFIG``.
     """
-    if not features.jump_detected and abs(features.momentum_z) < MOMENTUM_Z_THRESHOLD:
+    cfg = config if config is not None else DEFAULT_CONFIG
+    z_th = cfg.momentum_z_threshold
+    min_conf = cfg.min_confidence
+
+    if not features.jump_detected and abs(features.momentum_z) < z_th:
         return None
 
     signal_type = (
@@ -134,14 +142,12 @@ def features_to_signal(features: FeatureVector) -> Signal | None:
         else SignalType.MOMENTUM_DOWN
     )
 
-    # Confidence scaled by how much z-score exceeds threshold
-    z_excess = max(0.0, abs(features.momentum_z) - MOMENTUM_Z_THRESHOLD)
-    confidence = min(0.95, MIN_CONFIDENCE + 0.05 * z_excess)
+    z_excess = max(0.0, abs(features.momentum_z) - z_th)
+    confidence = min(0.95, min_conf + 0.05 * z_excess)
 
-    # Implied probability shift magnitude (rough heuristic, refined in backtest)
     implied_shift = min(0.15, abs(features.short_return) * 50)
 
-    if confidence < MIN_CONFIDENCE:
+    if confidence < min_conf:
         return None
 
     return Signal(

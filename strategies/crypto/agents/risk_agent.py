@@ -270,23 +270,58 @@ class RiskAgent:
 
         market_price = opp.market.yes_ask if opp.side == Side.YES else opp.market.no_ask
 
-        # Breakeven gate — reject if edge doesn't clear fee + slippage at this price.
-        # Fee is parabolic: peaks at P=0.5. Tick/slippage rounding costs dominate at
-        # extreme prices. Static min_edge doesn't account for price-dependent dynamics.
-        fee_cost = self._cfg.kalshi_taker_fee_rate * market_price * (1.0 - market_price)
-        # Dynamic slippage: half the market spread is the expected cost of crossing.
-        # Floor at estimated_slippage to avoid zero-spread edge cases.
-        dynamic_slippage = max(
-            self._cfg.estimated_slippage,
-            opp.market.spread_pct * market_price / 2.0,
+        # 1. Size the position first to know how much liquidity we need
+        size = position_size(
+            model_prob=opp.model_prob,
+            market_price=market_price,
+            bankroll_usdc=self._bankroll,
         )
+
+        # Apply hard caps before liquidity check
+        max_by_exposure = self._bankroll * self._cfg.max_single_exposure_pct
+        size = min(size, max_by_exposure)
+
+        if opp.side == Side.NO:
+            max_no_size = max_by_exposure * market_price
+            size = min(size, max_no_size)
+
+        is_15m = opp.market.ticker.upper().startswith(("KXBTC15M-", "KXETH15M-"))
+        if is_15m and market_price > 0:
+            max_15m_usd = self._cfg.max_15m_contracts * market_price
+            if size > max_15m_usd:
+                size = max_15m_usd
+
+        if size < 1.0:
+            logger.info(
+                "RISK REJECT size_too_small: %s | size=%.4f USDC | model_prob=%.3f ask=%.3f edge_vs_ask=%.3f",
+                opp.market.ticker, size, opp.model_prob, market_price,
+                abs(opp.model_prob - market_price),
+            )
+            return None
+
+        # 2. Breakeven gate with physical L2 slippage
+        fee_cost = self._cfg.kalshi_taker_fee_rate * market_price * (1.0 - market_price)
+        
+        top_of_book_size = opp.market.yes_ask_size if opp.side == Side.YES else opp.market.no_ask_size
+        
+        sweep_penalty = 0.0
+        if size > top_of_book_size:
+            import math
+            # Every extra multiple of top_of_book_size we consume sweeps the book ~1 cent deeper
+            effective_tob = max(1.0, top_of_book_size)
+            sweep_levels = (size - top_of_book_size) / effective_tob
+            sweep_penalty = math.ceil(sweep_levels) * 0.01
+
+        # Base spread cost + penalty for sweeping levels
+        dynamic_slippage = (opp.market.spread_pct * market_price / 2.0) + sweep_penalty
+        
         breakeven = fee_cost + dynamic_slippage
         if opp.edge < breakeven:
             logger.info(
                 "RISK REJECT below_breakeven: %s | edge=%.4f < breakeven=%.4f "
-                "(fee=%.4f slip=%.4f [spread=%.3f]) at P=%.3f",
+                "(fee=%.4f slip=%.4f [spread=%.3f, sweep_pen=%.3f, size=%.0f, tob=%.0f]) at P=%.3f",
                 opp.market.ticker, opp.edge, breakeven,
-                fee_cost, dynamic_slippage, opp.market.spread_pct, market_price,
+                fee_cost, dynamic_slippage, opp.market.spread_pct, sweep_penalty, size, top_of_book_size, market_price,
             )
             return None
 
@@ -326,43 +361,7 @@ class RiskAgent:
             )
             return None
 
-        size = position_size(
-            model_prob=opp.model_prob,
-            market_price=market_price,
-            bankroll_usdc=self._bankroll,
-        )
-
-        # Apply hard caps
-        max_by_exposure = self._bankroll * self._cfg.max_single_exposure_pct
-        size = min(size, max_by_exposure)
-
-        # Scale NO position size proportionally to fill price.
-        # At NO price=0.50 → max $5k instead of $10k. This makes
-        # dollar-at-risk proportional to the payout ratio.
-        if opp.side == Side.NO:
-            max_no_size = max_by_exposure * market_price
-            size = min(size, max_no_size)
-
-        # 15M Up/Down contract cap — limit number of contracts to prevent
-        # catastrophic single-position losses (was 179 contracts → -$116).
-        is_15m = opp.market.ticker.upper().startswith(("KXBTC15M-", "KXETH15M-"))
-        if is_15m and market_price > 0:
-            max_15m_usd = self._cfg.max_15m_contracts * market_price
-            if size > max_15m_usd:
-                logger.info(
-                    "RISK CAP 15m_contract_limit: %s | size=%.0f → %.0f (max %d contracts × %.2f)",
-                    opp.market.ticker, size, max_15m_usd,
-                    self._cfg.max_15m_contracts, market_price,
-                )
-                size = max_15m_usd
-
-        if size < 1.0:
-            logger.info(
-                "RISK REJECT size_too_small: %s | size=%.4f USDC | model_prob=%.3f ask=%.3f edge_vs_ask=%.3f",
-                opp.market.ticker, size, opp.model_prob, market_price,
-                abs(opp.model_prob - market_price),
-            )
-            return None
+        # (Size calculation moved up to compute dynamic slippage)
 
         # Proactive exposure gate — reject if total pending worst-case loss across
         # open positions + this trade would push us past the daily-loss circuit

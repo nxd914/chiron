@@ -23,6 +23,7 @@ from .models import FeatureVector, Tick
 SHORT_RETURN_WINDOW_SECONDS = 5.0    # lookback for short return
 VOL_WINDOW_SECONDS = 60.0            # lookback for realized vol (signal detection)
 VOL_WINDOW_LONG_SECONDS = 900.0      # 15-minute lookback for pricing vol (more stable for 1-4h contracts)
+VOL_WINDOW_1H_SECONDS = 3600.0       # 1-hour lookback for pricing 4h-8h contracts
 MIN_TICKS_FOR_FEATURES = 10          # minimum observations before emitting
 JUMP_RETURN_THRESHOLD = 0.002        # 0.2% return in window -> jump
 ANNUALIZATION_FACTOR = math.sqrt(365 * 24 * 3600)  # per-second vol -> annual
@@ -73,6 +74,33 @@ class EwmaDrift:
         w = 1.0 - math.exp(-self._alpha * dt)
         self._ewma = (1.0 - w) * self._ewma + w * drift_per_sec
         self._last_price = price
+        self._last_ts = ts
+
+
+class EwmaObi:
+    """Exponentially weighted moving average of Order Book Imbalance."""
+
+    def __init__(self, half_life_seconds: float = 5.0) -> None:
+        self._alpha = math.log(2) / max(half_life_seconds, 1e-9)
+        self._ewma: float = 0.0
+        self._last_ts: float = 0.0
+        self._initialized: bool = False
+
+    @property
+    def value(self) -> float:
+        return self._ewma
+
+    def push(self, obi: float, ts: float) -> None:
+        if not self._initialized:
+            self._ewma = obi
+            self._last_ts = ts
+            self._initialized = True
+            return
+        dt = ts - self._last_ts
+        if dt <= 0:
+            return
+        w = 1.0 - math.exp(-self._alpha * dt)
+        self._ewma = (1.0 - w) * self._ewma + w * obi
         self._last_ts = ts
 
 
@@ -199,9 +227,12 @@ def compute_features(
     window: RollingWindow,
     tick: Tick,
     short_window_seconds: float = SHORT_RETURN_WINDOW_SECONDS,
+    jump_return_threshold: float = JUMP_RETURN_THRESHOLD,
     long_window: Optional[RollingWindow] = None,
+    window_1h: Optional[RollingWindow] = None,
     drift_short: Optional[EwmaDrift] = None,
     drift_long: Optional[EwmaDrift] = None,
+    obi_tracker: Optional[EwmaObi] = None,
 ) -> Optional[FeatureVector]:
     """
     Compute a FeatureVector from rolling window state after ingesting a tick.
@@ -216,6 +247,7 @@ def compute_features(
         long_window: optional 15-minute rolling window (for pricing vol)
         drift_short: optional EWMA drift tracker (short half-life)
         drift_long: optional EWMA drift tracker (long half-life)
+        obi_tracker: optional EWMA order book imbalance tracker
     """
     if window.count < MIN_TICKS_FOR_FEATURES:
         return None
@@ -225,7 +257,7 @@ def compute_features(
         return None
 
     realized_vol = window.realized_vol()
-    jump_detected = abs(short_return) >= JUMP_RETURN_THRESHOLD
+    jump_detected = abs(short_return) >= jump_return_threshold
 
     # Momentum z-score: how many stds is this return from the rolling mean
     std = window.std
@@ -241,9 +273,17 @@ def compute_features(
     if realized_vol_long <= 0.0:
         realized_vol_long = realized_vol
 
+    # 1h vol: use 1h window if available and warmed up, else fall back to 15m
+    realized_vol_1h = 0.0
+    if window_1h is not None and window_1h.count >= MIN_TICKS_FOR_FEATURES:
+        realized_vol_1h = window_1h.realized_vol()
+    if realized_vol_1h <= 0.0:
+        realized_vol_1h = realized_vol_long
+
     # EWMA drift values (annualized)
     ewma_drift_short_val = drift_short.annualized_drift if drift_short else 0.0
     ewma_drift_long_val = drift_long.annualized_drift if drift_long else 0.0
+    ewma_obi_val = obi_tracker.value if obi_tracker else 0.0
 
     return FeatureVector(
         symbol=tick.symbol,
@@ -252,8 +292,10 @@ def compute_features(
         short_return=short_return,
         realized_vol=realized_vol,
         realized_vol_long=realized_vol_long,
+        realized_vol_1h=realized_vol_1h,
         jump_detected=jump_detected,
         momentum_z=momentum_z,
         ewma_drift_short=ewma_drift_short_val,
         ewma_drift_long=ewma_drift_long_val,
+        ewma_obi=ewma_obi_val,
     )

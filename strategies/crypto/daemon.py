@@ -60,16 +60,16 @@ _SHUTDOWN_TIMEOUT_SECONDS = 10.0
 _PID_PATH = Path(__file__).resolve().parents[2] / "data" / "paper_fund.pid"
 _WATCHDOG_CHECK_SECONDS = 300    # check scanner health every 5 min
 _SCAN_STALE_THRESHOLD_SECONDS = 1800  # alert if no scan in 30 min during trading hours
-_TRADING_START_UTC = 8
-_TRADING_END_UTC = 1
 _BANKROLL_REFRESH_SECONDS = 60
 
 
-def _is_trading_hours() -> bool:
+def _is_trading_hours(cfg: Config) -> bool:
+    """Match ScannerAgent: same UTC window as Config.trading_*_hour_utc."""
     hour = datetime.now(tz=timezone.utc).hour
-    if _TRADING_START_UTC <= _TRADING_END_UTC:
-        return _TRADING_START_UTC <= hour < _TRADING_END_UTC
-    return hour >= _TRADING_START_UTC or hour < _TRADING_END_UTC
+    start, end = cfg.trading_start_hour_utc, cfg.trading_end_hour_utc
+    if start <= end:
+        return start <= hour < end
+    return hour >= start or hour < end
 
 
 async def _guarded(coro: Awaitable, name: str) -> None:
@@ -109,11 +109,11 @@ async def _bankroll_refresher(
         await client.close()
 
 
-async def _watchdog(scanner: ScannerAgent) -> None:
+async def _watchdog(scanner: ScannerAgent, config: Config) -> None:
     await asyncio.sleep(120)  # let scanner warm up before first check
     while True:
         await asyncio.sleep(_WATCHDOG_CHECK_SECONDS)
-        if not _is_trading_hours():
+        if not _is_trading_hours(config):
             continue
         last_ts = scanner.last_scan_ts
         if last_ts is None:
@@ -128,6 +128,7 @@ async def _watchdog(scanner: ScannerAgent) -> None:
 
 async def main() -> None:
     config = Config.from_env()
+    config.validate()
     env = resolve_environment()
     log_environment_banner(env)
 
@@ -176,7 +177,11 @@ async def main() -> None:
 
     # Agents
     crypto_feed = CryptoFeedAgent(tick_queue=tick_queue, symbols=TRACKED_SYMBOLS)
-    feature_agent = FeatureAgent(tick_queue=tick_queue, signal_queue=signal_queue)
+    feature_agent = FeatureAgent(
+        tick_queue=tick_queue,
+        signal_queue=signal_queue,
+        config=config,
+    )
 
     ws_agent = WebsocketAgent(
         api_key=env.api_key,
@@ -189,7 +194,6 @@ async def main() -> None:
         bankroll_usdc=initial_bankroll,
         price_cache=ws_agent.price_cache,
         crypto_features=feature_agent.latest_features,
-        min_edge=config.min_edge,
         config=config,
     )
     risk = RiskAgent(
@@ -229,7 +233,7 @@ async def main() -> None:
         asyncio.create_task(_guarded(risk.run(), "risk"), name="risk"),
         asyncio.create_task(_guarded(execution.run(), "execution"), name="execution"),
         asyncio.create_task(_guarded(portfolio.run(), "portfolio"), name="portfolio"),
-        asyncio.create_task(_watchdog(scanner), name="watchdog"),
+        asyncio.create_task(_watchdog(scanner, config), name="watchdog"),
     ]
 
     tasks.append(

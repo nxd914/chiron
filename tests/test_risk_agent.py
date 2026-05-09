@@ -44,6 +44,10 @@ def _make_opp(ticker: str, spread: float = DEFAULT_CONFIG.min_spread_pct + 0.01,
         no_ask=mid + half,
         implied_prob=mid,
         spread_pct=spread,
+        yes_ask_size=5000.0,
+        yes_bid_size=5000.0,
+        no_ask_size=5000.0,
+        no_bid_size=5000.0,
         volume_24h=5000,
         liquidity=2000,
         close_time="",
@@ -239,6 +243,10 @@ def _make_opp_at_price(ticker: str, price: float, edge: float) -> TradeOpportuni
         no_ask=price,
         implied_prob=price - half,
         spread_pct=spread,
+        yes_ask_size=5000.0,
+        yes_bid_size=5000.0,
+        no_ask_size=5000.0,
+        no_bid_size=5000.0,
         volume_24h=5000,
         liquidity=2000,
         close_time="",
@@ -262,7 +270,7 @@ def _make_opp_at_price(ticker: str, price: float, edge: float) -> TradeOpportuni
 async def test_breakeven_gate_rejects_sub_breakeven_edge():
     """Edge below fee+slippage at ATM must be rejected."""
     from strategies.crypto.core.config import Config
-    cfg = Config(estimated_slippage=0.005)
+    cfg = Config()
     agent = RiskAgent(asyncio.Queue(), asyncio.Queue(), bankroll_usdc=500.0, config=cfg)
     agent.mark_seeded()
     # At P=0.5: fee = 0.07*0.5*0.5 = 0.0175; breakeven = 0.0175 + 0.005 = 0.0225
@@ -275,7 +283,7 @@ async def test_breakeven_gate_rejects_sub_breakeven_edge():
 async def test_breakeven_gate_approves_sufficient_edge():
     """Edge clearly above fee+slippage must pass the breakeven gate."""
     from strategies.crypto.core.config import Config
-    cfg = Config(estimated_slippage=0.005)
+    cfg = Config()
     agent = RiskAgent(asyncio.Queue(), asyncio.Queue(), bankroll_usdc=500.0, config=cfg)
     agent.mark_seeded()
     # At P=0.35: breakeven ≈ fee(0.016) + slip(0.005) = 0.021; edge=0.10 passes
@@ -292,7 +300,7 @@ async def test_breakeven_gate_lower_at_extreme_price():
     (0.0113), demonstrating the gate is price-aware and not a static floor.
     """
     from strategies.crypto.core.config import Config
-    cfg = Config(estimated_slippage=0.005)
+    cfg = Config()
     agent = RiskAgent(asyncio.Queue(), asyncio.Queue(), bankroll_usdc=500.0, config=cfg)
     agent.mark_seeded()
     # At P=0.1: fee = 0.07*0.1*0.9 = 0.0063; breakeven = 0.0063+0.005 = 0.0113
@@ -549,6 +557,10 @@ def _make_no_opp_with_edge(ticker: str, no_ask: float, edge: float) -> TradeOppo
         no_ask=no_ask,
         implied_prob=mid,
         spread_pct=spread,
+        yes_ask_size=5000.0,
+        yes_bid_size=5000.0,
+        no_ask_size=5000.0,
+        no_bid_size=5000.0,
         volume_24h=5000,
         liquidity=2000,
         close_time="",
@@ -570,7 +582,7 @@ def _make_no_opp_with_edge(ticker: str, no_ask: float, edge: float) -> TradeOppo
 
 @pytest.mark.asyncio
 async def test_low_ror_rejects_thin_edge_at_high_price():
-    """NO at 0.80 with edge=0.05 → RoR=6.25%, below 10% floor → reject."""
+    """NO at 0.80 with edge=0.05 → RoR=6.25%, below min_return_on_risk floor → reject."""
     agent = _make_agent()
     opp = _make_no_opp_with_edge("KXBTC-LOW-ROR", no_ask=0.80, edge=0.05)
     assert agent._evaluate(opp) is None
@@ -582,7 +594,7 @@ async def test_low_ror_rejects_99c_no_with_passing_pp_edge():
 
     The price cap (max_no_fill_price=0.85) catches this first, but if it
     were ever loosened, the RoR gate is the second line of defense:
-    edge=0.035 / price=0.99 = 3.5% < 10% → reject.
+    edge=0.035 / price=0.99 = 3.5% < min_return_on_risk → reject.
     """
     from strategies.crypto.core.config import Config
     cfg = replace(DEFAULT_CONFIG, max_daily_loss_pct=0.20, max_no_fill_price=0.99)
@@ -594,7 +606,7 @@ async def test_low_ror_rejects_99c_no_with_passing_pp_edge():
 
 @pytest.mark.asyncio
 async def test_ror_passes_at_moderate_price_and_edge():
-    """NO at 0.50 with edge=0.10 → RoR=20%, well above 10% floor → pass."""
+    """NO at 0.50 with edge=0.10 → RoR=20%, clears min_return_on_risk → pass."""
     agent = _make_agent()
     opp = _make_no_opp_with_edge("KXBTC-OK-ROR", no_ask=0.50, edge=0.10)
     assert agent._evaluate(opp) is not None

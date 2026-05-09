@@ -7,7 +7,7 @@ CEX spot data, and emits TradeOpportunity objects whenever the model
 probability diverges from the market price by more than MIN_EDGE.
 
 Two concurrent loops:
-  1. Periodic scan — re-prices all crypto contracts every SCAN_INTERVAL_SECONDS
+  1. Periodic scan — re-prices crypto contracts on Config.scan_interval_seconds cadence
   2. Signal-triggered scan — when CryptoFeedAgent fires a momentum signal,
      immediately re-evaluates the matching contracts
 
@@ -39,27 +39,6 @@ from ..core.models import (
 from ..core.pricing import bracket_prob, spot_to_implied_prob, up_down_15m_prob
 
 logger = logging.getLogger(__name__)
-
-SCAN_INTERVAL_SECONDS = 120     # re-price crypto contracts every 2 minutes
-SCAN_STARTUP_DELAY_SECONDS = 15  # brief pause for feeds to warm up
-SCAN_CONCURRENCY = 8            # parallel market evaluations
-SCAN_LIMIT = 200                # max markets to evaluate per cycle
-MIN_TIME_TO_CLOSE_MINUTES = 5   # crypto contracts are short-lived (15m, 1h)
-MAX_HOURS_TO_CLOSE = 4          # skip contracts expiring beyond this horizon (latency arb needs fast convergence)
-SIGNAL_SCAN_CANDIDATE_LIMIT = 400
-SIGNAL_COOLDOWN_SECONDS = 5     # tighter cooldown for sub-second crypto signals
-# Conservative vol floor for BTC/ETH in low-vol regimes.  Cold-start (vol=0)
-# is now handled by an explicit warmup guard in _score() rather than this floor.
-MIN_CRYPTO_VOL = 0.30
-MAX_BRACKET_YES_PRICE = 0.30    # don't buy YES on brackets above this — inverted risk/reward
-MIN_BRACKET_DISTANCE_PCT = 0.005  # skip brackets where spot is within 0.5% of bracket midpoint — model unreliable near ATM
-
-# Trading hours window (UTC). Outside this window, scan interval slows to 10 minutes.
-# Kalshi crypto contracts are most active during US market hours.
-TRADING_START_HOUR_UTC = 0    # crypto is 24/7; scan around the clock
-TRADING_END_HOUR_UTC = 24
-IDLE_SCAN_INTERVAL_SECONDS = 600  # 10 minutes between scans outside trading hours
-MIN_LIVE_LIQUIDITY_USD = 2500.0  # live orders are ~$2,500; skip markets too thin to absorb them
 
 # Kalshi series tickers to fetch directly (not discoverable via /events)
 CRYPTO_SERIES = ("KXBTC", "KXETH", "KXSOL", "KXXRP")
@@ -103,16 +82,13 @@ class ScannerAgent:
         signal_queue: Optional[asyncio.Queue[Signal]] = None,
         price_cache: Optional[dict] = None,
         crypto_features: Optional[dict] = None,
-        scan_limit: int = SCAN_LIMIT,
-        min_edge: float = 0.02,
-        enable_brackets: bool = True,
         config: Optional[Config] = None,
     ) -> None:
         self._opportunities = opportunity_queue
         self._bankroll = bankroll_usdc
         self._signals = signal_queue
         self._cfg = config or DEFAULT_CONFIG
-        # Derive gate thresholds from Config (single source of truth).
+        # All scan gates come from Config (single source of truth).
         self._scan_limit = self._cfg.scan_limit
         self._min_edge = self._cfg.min_edge
         self._enable_brackets = self._cfg.enable_brackets
@@ -131,6 +107,25 @@ class ScannerAgent:
         """Update bankroll from live account balance. Used by daemon's refresher."""
         if usdc > 0:
             self._bankroll = usdc
+
+    def _is_trading_hours(self) -> bool:
+        """True when current UTC hour is within Config.trading_*_hour_utc window."""
+        hour = datetime.now(tz=timezone.utc).hour
+        start, end = self._cfg.trading_start_hour_utc, self._cfg.trading_end_hour_utc
+        if start <= end:
+            return start <= hour < end
+        return hour >= start or hour < end
+
+    def _has_enough_time(self, close_time: str) -> bool:
+        """True if market has at least min_time_to_close_minutes until expiry."""
+        if not close_time:
+            return True
+        try:
+            expiry = datetime.fromisoformat(close_time.replace("Z", "+00:00"))
+            minutes_left = (expiry - datetime.now(tz=timezone.utc)).total_seconds() / 60
+            return minutes_left >= self._cfg.min_time_to_close_minutes
+        except (ValueError, TypeError):
+            return True
 
     @property
     def last_scan_ts(self) -> Optional[datetime]:
@@ -200,7 +195,7 @@ class ScannerAgent:
         logger.info("Scanner: waiting %ds for feeds to warm up...", self._cfg.scan_startup_delay_seconds)
         await asyncio.sleep(self._cfg.scan_startup_delay_seconds)
         while True:
-            if not _is_trading_hours():
+            if not self._is_trading_hours():
                 logger.info("Scanner: outside trading hours, sleeping %ds", self._cfg.idle_scan_interval_seconds)
                 await asyncio.sleep(self._cfg.idle_scan_interval_seconds)
                 continue
@@ -247,7 +242,7 @@ class ScannerAgent:
                     )
 
             # Outside trading hours: spot cache updated above, skip evaluation
-            if not _is_trading_hours():
+            if not self._is_trading_hours():
                 continue
 
             # Enforce cooldown
@@ -331,7 +326,7 @@ class ScannerAgent:
         is_bracket = _is_bracket_market(market)
         is_up_down = _is_up_down_15m_market(market)
 
-        if not _has_enough_time(market.close_time):
+        if not self._has_enough_time(market.close_time):
             logger.debug("SCORE skip time: %s | close=%s", market.ticker, market.close_time)
             return None
 
@@ -406,8 +401,11 @@ class ScannerAgent:
                 )
                 return self._skip("atm_bracket")
 
-            p_drift = bracket_prob(spot_price, floor, cap, hours_to_expiry, vol, drift=drift)
-            p_zero  = bracket_prob(spot_price, floor, cap, hours_to_expiry, vol, drift=0.0)
+            raw_d = bracket_prob(spot_price, floor, cap, hours_to_expiry, vol, drift=drift)
+            raw_z = bracket_prob(spot_price, floor, cap, hours_to_expiry, vol, drift=0.0)
+            cal = self._cfg.bracket_calibration
+            p_drift = min(1.0, max(0.0, raw_d * cal))
+            p_zero = min(1.0, max(0.0, raw_z * cal))
             model_prob = p_drift
             strike_repr = f"[{floor:.0f},{cap:.0f}]"
         else:
@@ -683,31 +681,6 @@ def _market_text_blob(market: KalshiMarket) -> str:
     return f"{market.ticker} {market.title} {market.event_ticker}".casefold()
 
 
-def _is_trading_hours() -> bool:
-    """Return True if current UTC hour is within the active trading window.
-
-    Window wraps midnight: TRADING_START_HOUR_UTC=8 to TRADING_END_HOUR_UTC=1
-    means 08:00-23:59 and 00:00-00:59 UTC are active.
-    """
-    hour = datetime.now(tz=timezone.utc).hour
-    if TRADING_START_HOUR_UTC <= TRADING_END_HOUR_UTC:
-        return TRADING_START_HOUR_UTC <= hour < TRADING_END_HOUR_UTC
-    # Wraps midnight: e.g. start=8, end=1 means 8-23 OR 0
-    return hour >= TRADING_START_HOUR_UTC or hour < TRADING_END_HOUR_UTC
-
-
-def _has_enough_time(close_time: str) -> bool:
-    """Returns True if market has at least MIN_TIME_TO_CLOSE_MINUTES remaining."""
-    if not close_time:
-        return True
-    try:
-        expiry = datetime.fromisoformat(close_time.replace("Z", "+00:00"))
-        minutes_left = (expiry - datetime.now(tz=timezone.utc)).total_seconds() / 60
-        return minutes_left >= MIN_TIME_TO_CLOSE_MINUTES
-    except (ValueError, TypeError):
-        return True
-
-
 def _hours_until(close_time: str) -> float:
     """Hours from now until market close. Returns 0.0 if unparseable."""
     if not close_time:
@@ -732,7 +705,7 @@ def _synthetic_signal(
         else SignalType.MOMENTUM_DOWN
     )
     symbol = _market_symbol(market) or market.event_ticker or market.ticker
-    # Use current time — market.timestamp can be up to SCAN_INTERVAL_SECONDS old,
+    # Use current time — market.timestamp can be up to scan_interval_seconds old,
     # which would cause the risk agent's MAX_SIGNAL_AGE_SECONDS gate to reject all
     # periodic-scan opportunities as stale signals.
     now = datetime.now(timezone.utc)

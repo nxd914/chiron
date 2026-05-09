@@ -662,6 +662,16 @@ def _parse_market(raw: dict) -> Optional[KalshiMarket]:
         raw_vol = raw.get("volume_24h_fp") or raw.get("volume_24h") or 0
         volume_24h = float(raw_vol) / 100.0 if str(raw_vol).isdigit() else float(raw_vol)
 
+        def _to_size(key_fp: str, fallback_key: str) -> float:
+            v = raw.get(key_fp) or raw.get(fallback_key) or 0
+            # fp fields are in cents. Convert to USD.
+            return float(v) / 100.0 if str(v).isdigit() else float(v)
+
+        yes_ask_size = _to_size("yes_ask_size_fp", "yes_ask_size")
+        yes_bid_size = _to_size("yes_bid_size_fp", "yes_bid_size")
+        no_ask_size = _to_size("no_ask_size_fp", "no_ask_size")
+        no_bid_size = _to_size("no_bid_size_fp", "no_bid_size")
+
         # Liquidity: liquidity_dollars or open_interest
         # Note: open_interest is usually in contracts (cents), liquidity_dollars is USD
         raw_liq = raw.get("liquidity_dollars") or raw.get("liquidity") or 0
@@ -685,6 +695,10 @@ def _parse_market(raw: dict) -> Optional[KalshiMarket]:
             no_ask=no_ask,
             implied_prob=implied_prob,
             spread_pct=spread_pct,
+            yes_ask_size=yes_ask_size,
+            yes_bid_size=yes_bid_size,
+            no_ask_size=no_ask_size,
+            no_bid_size=no_bid_size,
             volume_24h=volume_24h,
             liquidity=liquidity,
             close_time=raw.get("close_time", ""),

@@ -39,6 +39,7 @@ class Tick:
     price: float
     timestamp: datetime
     volume: float = 0.0
+    obi: float = 0.0       # Order Book Imbalance: (bid_vol - ask_vol) / (bid_vol + ask_vol)
 
 
 @dataclass(frozen=True)
@@ -56,8 +57,10 @@ class FeatureVector:
     jump_detected: bool       # True if return exceeds jump threshold
     momentum_z: float         # z-score of short return vs rolling mean
     realized_vol_long: float = 0.0  # rolling annualized vol (15min window, for pricing). Falls back to realized_vol if 0.
+    realized_vol_1h: float = 0.0    # rolling annualized vol (1h window, for 4h-8h contracts).
     ewma_drift_short: float = 0.0   # annualized EWMA log-return drift (30s half-life). Used for ≤15min horizons.
     ewma_drift_long: float = 0.0    # annualized EWMA log-return drift (5min half-life). Used for ≥1h horizons.
+    ewma_obi: float = 0.0           # short-term EWMA of order book imbalance
 
 
 @dataclass(frozen=True)

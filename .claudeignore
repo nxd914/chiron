@@ -1,18 +1,55 @@
-# Files Claude should not read — keeps AI context scoped to strategy logic only.
-# Format is identical to .gitignore.
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
 
-# Deployment / infrastructure — not trading logic
-deploy/
-.github/
+# Virtual environments
+.venv/
+venv/
+env/
 
-# License boilerplate
-LICENSE
+# Environment
+.env
+.env.*
+*.pem
 
-# Package / build config — no strategy logic here
-pyproject.toml
-requirements.txt
+# Data / trade logs (never commit live or paper trade data)
+data/
+*.db
+*.log
+*.log.*
+*.pid
 
-# Root-level boilerplate
-__init__.py
-conftest.py
-README.md
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Type checker
+.mypy_cache/
+
+# Linter
+.ruff_cache/
+
+#Research
+quant/
+
+# Local ops runbook (contains IP, project ID, redeploy commands)
+RUNBOOK.local.md

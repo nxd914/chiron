@@ -117,12 +117,20 @@ class CryptoFeedAgent:
             # c[0] is the last trade price
             price = float(payload["c"][0])
             
+            # Extract top-of-book volumes to calculate Order Book Imbalance (OBI)
+            ask_vol = float(payload["a"][2]) if "a" in payload else 0.0
+            bid_vol = float(payload["b"][2]) if "b" in payload else 0.0
+            obi = 0.0
+            if ask_vol + bid_vol > 0:
+                obi = (bid_vol - ask_vol) / (bid_vol + ask_vol)
+            
             return Tick(
                 exchange="kraken",
                 symbol=symbol,
                 price=price,
                 timestamp=datetime.now(tz=timezone.utc),  # Kraken WS ticker doesn't send ts, use local
                 volume=0.0,  # We don't strictly need volume for pricing features
+                obi=obi,
             )
         except Exception:
             return None

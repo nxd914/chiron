@@ -8,11 +8,12 @@ Covers:
 """
 
 import asyncio
+from dataclasses import replace
+from datetime import datetime, timezone
 from typing import Optional
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, patch
 
 from strategies.crypto.agents.scanner_agent import (
     ScannerAgent,
@@ -21,6 +22,7 @@ from strategies.crypto.agents.scanner_agent import (
     _is_up_down_15m_market,
     parse_strike,
 )
+from strategies.crypto.core.config import DEFAULT_CONFIG
 from strategies.crypto.core.models import (
     FeatureVector,
     KalshiMarket,
@@ -163,7 +165,7 @@ async def test_signal_scan_drains_burst_queue():
             raise KeyboardInterrupt("break loop")
 
     with patch("asyncio.sleep", side_effect=_fake_sleep), \
-         patch("strategies.crypto.agents.scanner_agent._is_trading_hours", return_value=True):
+         patch.object(ScannerAgent, "_is_trading_hours", return_value=True):
         try:
             await agent._signal_scan()
         except (KeyboardInterrupt, asyncio.CancelledError):
@@ -197,7 +199,7 @@ async def test_signal_scan_preserves_multi_symbol_signals():
             raise KeyboardInterrupt("break loop")
 
     with patch("asyncio.sleep", side_effect=_fake_sleep), \
-         patch("strategies.crypto.agents.scanner_agent._is_trading_hours", return_value=True):
+         patch.object(ScannerAgent, "_is_trading_hours", return_value=True):
         try:
             await agent._signal_scan()
         except (KeyboardInterrupt, asyncio.CancelledError):
@@ -404,7 +406,7 @@ async def test_score_prices_bracket_contract_with_edge():
                 ewma_drift_long=-2.0,
             )
         },
-        enable_brackets=True,
+        config=replace(DEFAULT_CONFIG, enable_brackets=True),
     )
     bracket_market = _make_market(
         title="Ethereum price at Apr 14, 2026?",
