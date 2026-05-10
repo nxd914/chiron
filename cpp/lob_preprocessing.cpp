@@ -12,6 +12,10 @@
 
 namespace py = pybind11;
 
+namespace microstructure {
+void bind_backtester(py::module_& m);
+}
+
 namespace {
 
 constexpr double kEps = 1e-8;
@@ -268,4 +272,6 @@ PYBIND11_MODULE(_cpp_lob, module) {
         py::arg("depth") = 10,
         py::arg("rolling_norm_window") = 256,
         "Build normalized rolling LOB windows and future-return targets.");
+
+    microstructure::bind_backtester(module);
 }

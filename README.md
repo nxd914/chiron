@@ -54,6 +54,34 @@ cmake -S . -B build
 cmake --build build
 ```
 
+## Microsecond Event-Driven C++ Backtester
+
+We have replaced standard vectorized Python backtesting with an institutional-grade, event-driven C++ backtesting engine. This engine processes Limit Order Book (LOB) updates as discrete events, simulating exact queue positions and microsecond latency.
+
+```mermaid
+stateDiagram-v2
+    [*] --> EventQueue: Push Event
+    
+    state EventQueue {
+        [*] --> PriorityQueue: Prioritized by Microsecond Timestamp
+    }
+    
+    EventQueue --> DataHandler: MARKET_DATA Event
+    DataHandler --> UpdateLOB: Update Best Bid/Ask & Volume
+    UpdateLOB --> EventQueue
+    
+    EventQueue --> ExecutionHandler: ORDER Event
+    ExecutionHandler --> SimulateLatency: Add 5ms Delay
+    SimulateLatency --> ScheduleFill: Push FILL Event
+    ScheduleFill --> EventQueue
+    
+    EventQueue --> ProcessFill: FILL Event
+    ProcessFill --> UpdateLedger: Execute Trade & Calc Slippage/PnL
+    UpdateLedger --> [*]
+```
+
+This engine is exposed to Python via `pybind11`, allowing research scripts to easily instantiate the backtester, pass in historical LOB datasets, and retrieve the final trade ledger and PnL.
+
 ## Quick Start
 
 Clone the repository:

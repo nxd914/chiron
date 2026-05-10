@@ -22,7 +22,8 @@ endif()
 
 find_package(pybind11 CONFIG REQUIRED)
 
-pybind11_add_module(_cpp_lob cpp/lob_preprocessing.cpp)
+pybind11_add_module(_cpp_lob cpp/lob_preprocessing.cpp cpp/backtester.cpp cpp/bindings.cpp)
+target_include_directories(_cpp_lob PRIVATE cpp)
 target_compile_options(_cpp_lob PRIVATE
     $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-O3 -Wall -Wextra -Wpedantic>
 )
