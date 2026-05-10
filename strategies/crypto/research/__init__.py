@@ -4,6 +4,7 @@ __all__ = [
     "DeepLOBCNNLSTM",
     "LOBDataModule",
     "LOBSnapshotDataset",
+    "build_lob_windows",
     "future_return",
     "snapshot_to_feature_vector",
 ]
@@ -14,12 +15,18 @@ def __getattr__(name: str):
         from .deeplob import DeepLOBCNNLSTM
 
         return DeepLOBCNNLSTM
-    if name in {"LOBDataModule", "LOBSnapshotDataset", "snapshot_to_feature_vector"}:
-        from .datamodule import LOBDataModule, LOBSnapshotDataset, snapshot_to_feature_vector
+    if name in {"LOBDataModule", "LOBSnapshotDataset", "build_lob_windows", "snapshot_to_feature_vector"}:
+        from .datamodule import (
+            LOBDataModule,
+            LOBSnapshotDataset,
+            build_lob_windows,
+            snapshot_to_feature_vector,
+        )
 
         return {
             "LOBDataModule": LOBDataModule,
             "LOBSnapshotDataset": LOBSnapshotDataset,
+            "build_lob_windows": build_lob_windows,
             "snapshot_to_feature_vector": snapshot_to_feature_vector,
         }[name]
     if name == "future_return":

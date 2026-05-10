@@ -6,7 +6,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from strategies.crypto.core.models import BookLevel, L2Snapshot
-from strategies.crypto.research.datamodule import LOBDataModule
+from strategies.crypto.research.datamodule import LOBDataModule, build_lob_windows
 from strategies.crypto.research.targets import future_return
 
 
@@ -55,3 +55,55 @@ def test_lob_datamodule_batch_shapes_and_finite_values(tmp_path):
     assert y.shape == (8,)
     assert torch.isfinite(x).all()
     assert torch.isfinite(y).all()
+
+
+def test_lob_window_builder_keeps_symbols_separate():
+    snapshots = [_snapshot(index) for index in range(6)]
+    snapshots.extend(
+        L2Snapshot(
+            exchange=snapshot.exchange,
+            symbol="ETH",
+            timestamp=snapshot.timestamp,
+            bids=snapshot.bids,
+            asks=snapshot.asks,
+            sequence=snapshot.sequence,
+        )
+        for snapshot in (_snapshot(index) for index in range(6))
+    )
+
+    built = build_lob_windows(
+        snapshots,
+        window_size=3,
+        horizon=1,
+        rolling_norm_window=4,
+        use_cpp=False,
+    )
+
+    assert built["windows"].shape == (6, 3, 40)
+    assert built["targets"].shape == (6,)
+
+
+def test_backward_rolling_normalization_does_not_use_future_rows():
+    base = [_snapshot(index) for index in range(8)]
+    changed_future = list(base)
+    changed_future[-1] = _snapshot(10_000)
+
+    base_built = build_lob_windows(
+        base,
+        window_size=3,
+        horizon=1,
+        rolling_norm_window=4,
+        use_cpp=False,
+    )
+    changed_built = build_lob_windows(
+        changed_future,
+        window_size=3,
+        horizon=1,
+        rolling_norm_window=4,
+        use_cpp=False,
+    )
+
+    assert torch.allclose(
+        torch.from_numpy(base_built["windows"][0]),
+        torch.from_numpy(changed_built["windows"][0]),
+    )

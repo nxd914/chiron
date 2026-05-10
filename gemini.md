@@ -21,6 +21,7 @@ This repository is a quantitative research environment for limit-order-book micr
 - Data ingestion must remain containerized. Production collection runs through Docker and the daemon entry point, not ad hoc scripts.
 - The PyTorch Lightning `LOBDataModule` is the single source of truth for tensor creation.
 - Model code must consume tensors produced by the DataModule rather than rebuilding feature windows independently.
+- C++ acceleration must stay behind stable Python interfaces and must preserve the DataModule contract. (To build: `uv venv && source .venv/bin/activate && uv pip install -e ".[dev]" && cmake -S . -B build && cmake --build build`)
 - Raw snapshots should remain replayable append-only records. Derived datasets can be regenerated from the JSONL source.
 
 ## Target Definition

@@ -25,6 +25,20 @@ volume_weighted_mid[t + k] / volume_weighted_mid[t] - 1
 
 Research code must avoid look-ahead bias. Normalization for experiments should use backward-looking rolling windows only, and validation should use Purged K-Fold or Walk-Forward splits rather than random train/test splits.
 
+## C++ Acceleration Layer
+
+The research DataModule can delegate CPU-bound LOB preprocessing to an optional C++17/pybind11 extension. The extension builds relative price/volume features, applies backward-looking rolling normalization, constructs per-symbol rolling windows, and aligns future-return targets while releasing the Python GIL. If the compiled module is unavailable, the same `LOBDataModule` API falls back to the reference Python/NumPy implementation.
+
+Build the extension locally:
+
+```bash
+uv venv
+source .venv/bin/activate
+uv pip install -e ".[dev]"
+cmake -S . -B build
+cmake --build build
+```
+
 ## Quick Start
 
 Clone the repository:
@@ -54,7 +68,7 @@ L2_JSONL_OUTPUT_DIR=data/l2
 Run the local research and regression suite:
 
 ```bash
-pip install -e ".[dev]"
+source .venv/bin/activate
 pytest
 ```
 
